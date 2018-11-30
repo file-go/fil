@@ -34,3 +34,4 @@ The code is based on [toybox](https://en.wikipedia.org/wiki/Toybox) (but it is w
 
 1. Port more code from [toybox/file.c](https://github.com/landley/toybox/blob/master/toys/posix/file.c)
 2. Port more code from [filetype/matchers](https://github.com/h2non/filetype/tree/master/matchers)
+3. [More magic](https://en.wikipedia.org/wiki/Magic_number_(programming))

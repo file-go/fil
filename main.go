@@ -58,7 +58,7 @@ func checkerr(e error) {
 }
 
 func usage() {
-	println("Usage: figo FILE_NAME")
+	println("Usage: fil FILE_NAME")
 	os.Exit(0)
 }
 
