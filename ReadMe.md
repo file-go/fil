@@ -1,5 +1,7 @@
 [@joeky888](https://github.com/joeky888) needs `file` command on Windows, so he made one.
 
+![Screen shot](https://i.imgur.com/SiV176F.png)
+
 ### Features
 
 * Pure Go, static binary without [libmagic](http://darwinsys.com/file)
