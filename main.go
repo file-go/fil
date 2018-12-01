@@ -82,10 +82,10 @@ func regularFile(filename string) {
 	/*---------------Read file end------------------------*/
 	magic := -1
 	if lenb > 112 {
-		magic = int(peekLe(contentStr[60:], 4))
+		magic = peekLe(contentStr[60:], 4)
 	}
 
-	if lenb >= 45 && HasPrefix(contentStr, "\177ELF") {
+	if lenb >= 45 && HasPrefix(contentStr, "\x7FELF") {
 		print("Elf file ")
 		doElf(contentByte)
 	} else if lenb >= 8 && HasPrefix(contentStr, "!<arch>\n") {
@@ -128,14 +128,14 @@ func regularFile(filename string) {
 		contentStr[magic:magic+4] == "\x50\x45\x00\x00" {
 
 		print("MS executable")
-		if int(peekLe(contentStr[magic+22:], 2)&0x2000) != 0 {
+		if peekLe(contentStr[magic+22:], 2)&0x2000 != 0 {
 			print("(DLL)")
 		}
 		print(" ")
 		if peekLe(contentStr[magic+20:], 2) > 70 {
 			types := []string{"", "native", "GUI", "console", "OS/2", "driver", "CE",
 				"EFI", "EFI boot", "EFI runtime", "EFI ROM", "XBOX", "", "boot"}
-			tp := int(peekLe(contentStr[magic+92:], 2))
+			tp := peekLe(contentStr[magic+92:], 2)
 			if tp > 0 && tp < len(types) {
 				print(types[tp])
 			}
@@ -152,7 +152,7 @@ func doElf(contentByte []byte) {
 	bits := int(contentChar[4])
 	endian := contentChar[5]
 
-	var elfint func(str string, size int) int64
+	var elfint func(str string, size int) int
 
 	if endian == 2 {
 		elfint = peekBe
@@ -161,31 +161,35 @@ func doElf(contentByte []byte) {
 	}
 
 	exei := elfint(contentStr[16:], 2)
-	if exei == 1 {
+
+	switch exei {
+	case 1:
 		print("relocatable")
-	} else if exei == 2 {
+	case 2:
 		print("executable")
-	} else if exei == 3 {
+	case 3:
 		print("shared object")
-	} else if exei == 4 {
+	case 4:
 		print("core dump")
-	} else {
+	default:
 		print("bad type")
 	}
 
 	print(", ")
 
-	if bits == 1 {
+	switch bits {
+	case 1:
 		print("32bit ")
-	} else if bits == 2 {
+	case 2:
 		print("64bit ")
 	}
 
-	if endian == 1 {
+	switch endian {
+	case 1:
 		print("LSB ")
-	} else if endian == 2 {
+	case 2:
 		print("MSB ")
-	} else {
+	default:
 		print("bad endian ")
 	}
 
@@ -250,22 +254,22 @@ func HasPrefix(s, prefix string) bool {
 	return len(s) >= len(prefix) && s[0:len(prefix)] == prefix
 }
 
-func peekLe(str string, size int) int64 {
+func peekLe(str string, size int) int {
 	ret := int64(0)
 	c := []byte(str)
 
 	for i := 0; i < size; i++ {
 		ret = ret | int64(c[i])<<uint8(i*8)
 	}
-	return ret
+	return int(ret)
 }
 
-func peekBe(str string, size int) int64 {
+func peekBe(str string, size int) int {
 	ret := int64(0)
 	c := []byte(str)
 
 	for i := 0; i < size; i++ {
 		ret = (ret << 8) | (int64(c[i]) & 0xff)
 	}
-	return ret
+	return int(ret)
 }
