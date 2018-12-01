@@ -69,7 +69,7 @@ func regularFile(filename string) {
 	// checkerr(err)
 	defer file.Close()
 
-	var contentByte = make([]byte, MAX_BYTES_TO_READ) //
+	var contentByte = make([]byte, MAX_BYTES_TO_READ)
 
 	numByte, _ := file.Read(contentByte)
 	// if err != nil && err != io.EOF {
@@ -77,82 +77,80 @@ func regularFile(filename string) {
 	// }
 	contentByte = contentByte[:numByte]
 
-	contentStr := string(contentByte) // File content in string
 	lenb := len(contentByte)
 	/*---------------Read file end------------------------*/
 	magic := -1
 	if lenb > 112 {
-		magic = peekLe(contentStr[60:], 4)
+		magic = peekLe(contentByte[60:], 4)
 	}
 
-	if lenb >= 45 && HasPrefix(contentStr, "\x7FELF") {
+	if lenb >= 45 && HasPrefix(contentByte, "\x7FELF") {
 		print("Elf file ")
 		doElf(contentByte)
-	} else if lenb >= 8 && HasPrefix(contentStr, "!<arch>\n") {
+	} else if lenb >= 8 && HasPrefix(contentByte, "!<arch>\n") {
 		print("ar archive")
-	} else if lenb > 28 && HasPrefix(contentStr, "\x89PNG\x0d\x0a\x1a\x0a") {
+	} else if lenb > 28 && HasPrefix(contentByte, "\x89PNG\x0d\x0a\x1a\x0a") {
 		print("PNG image data")
 	} else if lenb > 16 &&
-		(HasPrefix(contentStr, "GIF87a") || HasPrefix(contentStr, "GIF89a")) {
+		(HasPrefix(contentByte, "GIF87a") || HasPrefix(contentByte, "GIF89a")) {
 		print("GIF image data")
-	} else if lenb > 32 && HasPrefix(contentStr, "\xff\xd8") {
+	} else if lenb > 32 && HasPrefix(contentByte, "\xff\xd8") {
 		print("JPEG image data")
-	} else if lenb > 8 && HasPrefix(contentStr, "\xca\xfe\xba\xbe") {
+	} else if lenb > 8 && HasPrefix(contentByte, "\xca\xfe\xba\xbe") {
 		print("JAVA class file")
-	} else if lenb > 8 && HasPrefix(contentStr, "dex\n") {
+	} else if lenb > 8 && HasPrefix(contentByte, "dex\n") {
 		print("Android dex file")
-	} else if lenb > 500 && contentStr[257:262] == "ustar" {
+	} else if lenb > 500 && Equal(contentByte[257:262], "ustar") {
 		print("Posix tar archive")
-	} else if lenb > 5 && HasPrefix(contentStr, "PK\x03\x04") {
+	} else if lenb > 5 && HasPrefix(contentByte, "PK\x03\x04") {
 		print("Zip archive data")
-	} else if lenb > 4 && HasPrefix(contentStr, "BZh") {
+	} else if lenb > 4 && HasPrefix(contentByte, "BZh") {
 		print("bzip2 compressed data")
-	} else if lenb > 10 && HasPrefix(contentStr, "\x1f\x8b") {
+	} else if lenb > 10 && HasPrefix(contentByte, "\x1f\x8b") {
 		print("gzip compressed data")
-	} else if lenb > 32 && contentStr[1:4] == "\xfa\xed\xfe" {
+	} else if lenb > 32 && Equal(contentByte[1:4], "\xfa\xed\xfe") {
 		print("Mach-O")
-	} else if lenb > 36 && contentStr[0:6] == "OggS\x00\x02" {
+	} else if lenb > 36 && HasPrefix(contentByte, "OggS\x00\x02") {
 		print("Ogg data")
-	} else if lenb > 32 && contentStr[0:3] == "RIF" &&
-		string(contentByte[8:16]) == "WAVEfmt " {
+	} else if lenb > 32 && HasPrefix(contentByte, "RIF") &&
+		Equal(contentByte[8:16], "WAVEfmt ") {
 		print("WAV audio")
-	} else if lenb > 12 && HasPrefix(contentStr, "\x00\x01\x00\x00") {
+	} else if lenb > 12 && HasPrefix(contentByte, "\x00\x01\x00\x00") {
 		print("TrueType font")
-	} else if lenb > 12 && HasPrefix(contentStr, "ttcf\x00") {
+	} else if lenb > 12 && HasPrefix(contentByte, "ttcf\x00") {
 		print("TrueType font collection")
-	} else if lenb > 4 && HasPrefix(contentStr, "BC\xc0\xde") {
+	} else if lenb > 4 && HasPrefix(contentByte, "BC\xc0\xde") {
 		print("LLVM IR bitcode")
-	} else if HasPrefix(contentStr, "-----BEGIN CERTIFICATE-----") {
+	} else if HasPrefix(contentByte, "-----BEGIN CERTIFICATE-----") {
 		print("PEM certificate")
-	} else if magic != -1 && HasPrefix(contentStr, "MZ") && magic < lenb-4 &&
-		contentStr[magic:magic+4] == "\x50\x45\x00\x00" {
+	} else if magic != -1 && HasPrefix(contentByte, "MZ") && magic < lenb-4 &&
+		Equal(contentByte[magic:magic+4], "\x50\x45\x00\x00") {
 
 		print("MS executable")
-		if peekLe(contentStr[magic+22:], 2)&0x2000 != 0 {
+		if peekLe(contentByte[magic+22:], 2)&0x2000 != 0 {
 			print("(DLL)")
 		}
 		print(" ")
-		if peekLe(contentStr[magic+20:], 2) > 70 {
+		if peekLe(contentByte[magic+20:], 2) > 70 {
 			types := []string{"", "native", "GUI", "console", "OS/2", "driver", "CE",
 				"EFI", "EFI boot", "EFI runtime", "EFI ROM", "XBOX", "", "boot"}
-			tp := peekLe(contentStr[magic+92:], 2)
+			tp := peekLe(contentByte[magic+92:], 2)
 			if tp > 0 && tp < len(types) {
 				print(types[tp])
 			}
 		}
-	} else if lenb > 50 && HasPrefix(contentStr, "BM") &&
-		contentStr[6:10] == "\x00\x00\x00\x00" {
+	} else if lenb > 50 && HasPrefix(contentByte, "BM") &&
+		Equal(contentByte[6:10], "\x00\x00\x00\x00") {
 		print("BMP image")
 	}
 }
 
 func doElf(contentByte []byte) {
-	contentStr := string(contentByte)
-	contentChar := []byte(contentStr)
+	contentChar := []byte(contentByte)
 	bits := int(contentChar[4])
 	endian := contentChar[5]
 
-	var elfint func(str string, size int) int
+	var elfint func(c []byte, size int) int
 
 	if endian == 2 {
 		elfint = peekBe
@@ -160,7 +158,7 @@ func doElf(contentByte []byte) {
 		elfint = peekLe
 	}
 
-	exei := elfint(contentStr[16:], 2)
+	exei := elfint(contentByte[16:], 2)
 
 	switch exei {
 	case 1:
@@ -206,7 +204,7 @@ func doElf(contentByte []byte) {
 		"tilegx": 191, "386": 3, "486": 6, "x86-64": 62, "xtensa": 94, "xtensa-old": 0xabc7,
 	}
 
-	archj := elfint(contentStr[18:], 2)
+	archj := elfint(contentByte[18:], 2)
 	for key, val := range archType {
 		if val == int(archj) {
 			print(key)
@@ -216,16 +214,16 @@ func doElf(contentByte []byte) {
 
 	bits--
 
-	phentsize := elfint(contentStr[42+12*bits:], 2)
-	phnum := elfint(contentStr[44+12*bits:], 2)
-	phoff := elfint(contentStr[28+4*bits:], 4+4*bits)
-	// shsize 		:= elfint(contentStr[46+12*bits:], 2)
-	// shnum 		:= elfint(contentStr[48+12*bits:], 2)
-	// shoff 		:= elfint(contentStr[32+8*bits:], 4+4*bits)
+	phentsize := elfint(contentByte[42+12*bits:], 2)
+	phnum := elfint(contentByte[44+12*bits:], 2)
+	phoff := elfint(contentByte[28+4*bits:], 4+4*bits)
+	// shsize 		:= elfint(contentByte[46+12*bits:], 2)
+	// shnum 		:= elfint(contentByte[48+12*bits:], 2)
+	// shoff 		:= elfint(contentByte[32+8*bits:], 4+4*bits)
 	dynamic := false
 
 	for i := 0; i < int(phnum); i++ {
-		phdr := contentStr[int(phoff)+i*int(phentsize):]
+		phdr := contentByte[int(phoff)+i*int(phentsize):]
 		// char *phdr = map+phoff+i*phentsize;
 		p_type := elfint(phdr, 4)
 
@@ -241,7 +239,7 @@ func doElf(contentByte []byte) {
 		if p_type == 3 /*PT_INTERP*/ {
 			print(", dynamically linked")
 			//   print(p_filesz)
-			//   print(contentStr[p_offset*2:])
+			//   print(contentByte[p_offset*2:])
 		}
 	}
 
@@ -250,13 +248,24 @@ func doElf(contentByte []byte) {
 	}
 }
 
-func HasPrefix(s, prefix string) bool {
-	return len(s) >= len(prefix) && s[0:len(prefix)] == prefix
+func HasPrefix(s []byte, prefix string) bool {
+	return len(s) >= len(prefix) && Equal(s[:len(prefix)], prefix)
 }
 
-func peekLe(str string, size int) int {
+func Equal(a []byte, b string) bool {
+    if len(a) != len(b) {
+        return false
+    }
+    for i, v := range []byte(b) {
+        if v != a[i] {
+            return false
+        }
+    }
+    return true
+}
+
+func peekLe(c []byte, size int) int {
 	ret := int64(0)
-	c := []byte(str)
 
 	for i := 0; i < size; i++ {
 		ret = ret | int64(c[i])<<uint8(i*8)
@@ -264,9 +273,8 @@ func peekLe(str string, size int) int {
 	return int(ret)
 }
 
-func peekBe(str string, size int) int {
+func peekBe(c []byte, size int) int {
 	ret := int64(0)
-	c := []byte(str)
 
 	for i := 0; i < size; i++ {
 		ret = (ret << 8) | (int64(c[i]) & 0xff)
