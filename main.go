@@ -146,9 +146,8 @@ func regularFile(filename string) {
 }
 
 func doElf(contentByte []byte) {
-	contentChar := []byte(contentByte)
-	bits := int(contentChar[4])
-	endian := contentChar[5]
+	bits := int(contentByte[4])
+	endian := contentByte[5]
 
 	var elfint func(c []byte, size int) int
 
