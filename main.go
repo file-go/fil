@@ -103,7 +103,7 @@ func regularFile(filename string) {
 	} else if lenb > 32 && HasPrefix(contentByte, "\xff\xd8") {
 		print("JPEG image data")
 	} else if lenb > 8 && HasPrefix(contentByte, "\xca\xfe\xba\xbe") {
-		print("JAVA class file")
+		print("Java class file")
 	} else if lenb > 8 && HasPrefix(contentByte, "dex\n") {
 		print("Android dex file")
 	} else if lenb > 500 && Equal(contentByte[257:262], "ustar") {
@@ -211,7 +211,7 @@ func doElf(contentByte []byte) {
 
 	archj := elfint(contentByte[18:], 2)
 	for key, val := range archType {
-		if val == int(archj) {
+		if val == archj {
 			print(key)
 			break
 		}
@@ -227,8 +227,8 @@ func doElf(contentByte []byte) {
 	// shoff 		:= elfint(contentByte[32+8*bits:], 4+4*bits)
 	dynamic := false
 
-	for i := 0; i < int(phnum); i++ {
-		phdr := contentByte[int(phoff)+i*int(phentsize):]
+	for i := 0; i < phnum; i++ {
+		phdr := contentByte[phoff+i*phentsize:]
 		// char *phdr = map+phoff+i*phentsize;
 		p_type := elfint(phdr, 4)
 
