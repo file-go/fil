@@ -47,10 +47,10 @@ func main() {
 			print("device file")
 		} else if fi.Mode()&os.ModeNamedPipe != 0 {
 			print("fifo")
-		} else if fi.Mode()&os.ModeIrregular == 0 {
-			regularFile(filename)
+			// } else if fi.Mode()&os.ModeIrregular == 0 {
+			// 	regularFile(filename)
 		} else {
-			print("unknown")
+			regularFile(filename)
 		}
 		println()
 	}
@@ -258,15 +258,15 @@ func HasPrefix(s []byte, prefix string) bool {
 }
 
 func Equal(a []byte, b string) bool {
-    if len(a) != len(b) {
-        return false
-    }
-    for i, v := range []byte(b) {
-        if v != a[i] {
-            return false
-        }
-    }
-    return true
+	if len(a) != len(b) {
+		return false
+	}
+	for i, v := range []byte(b) {
+		if v != a[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func peekLe(c []byte, size int) int {
