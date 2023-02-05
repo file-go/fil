@@ -7,7 +7,10 @@ Maintainer: Joeky <jj16180339887@gmail.com>
 package main
 
 import (
+	"archive/zip"
+	"fmt"
 	"os"
+	"strings"
 )
 
 const (
@@ -109,7 +112,7 @@ func regularFile(filename string) {
 	} else if lenb > 500 && Equal(contentByte[257:262], "ustar") {
 		print("Posix tar archive")
 	} else if lenb > 5 && HasPrefix(contentByte, "PK\x03\x04") {
-		print("Zip archive data")
+		print(doZip(file))
 	} else if lenb > 4 && HasPrefix(contentByte, "BZh") {
 		print("bzip2 compressed data")
 	} else if lenb > 10 && HasPrefix(contentByte, "\x1f\x8b") {
@@ -254,6 +257,7 @@ func doElf(contentByte []byte) {
 }
 
 func HasPrefix(s []byte, prefix string) bool {
+	// print(s)
 	return len(s) >= len(prefix) && Equal(s[:len(prefix)], prefix)
 }
 
@@ -285,4 +289,69 @@ func peekBe(c []byte, size int) int {
 		ret = (ret << 8) | (int64(c[i]) & 0xff)
 	}
 	return int(ret)
+}
+
+func doZip(file *os.File) string {
+	// Function distinguishes between Office XML documents and regular zip files.
+	// First read the intial bytes of the file, and see if common Word, Excel, Powerpoint strings are present.
+	// Next, there are some other strings that seem to appear in Office documents of multiple types; For these,
+	// we will open the zip real quick and look for the Word, Excel, or PowerPoint xml file. Otherwise it is a regular zip.
+
+	// Open the file for reading
+	file, err := os.Open(os.Args[1])
+	if err != nil {
+		fmt.Println(err)
+		return "File error."
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		fmt.Println("Error getting file info:", err)
+		return ("File error")
+	}
+
+	// Read the first 60 bytes from the file
+	var buf [600]byte
+	_, err = file.Read(buf[:])
+	if err != nil {
+		fmt.Println(err)
+		return "File error."
+	}
+
+	// Convert the bytes to a string
+	str := string(buf[:])
+	// Some files have strings in the header indicating the Office program
+	if strings.Contains(str, "word/") && strings.Contains(str, "xml") {
+		return "Microsoft Word Document"
+	} else if strings.Contains(str, "ppt/theme") {
+		return "Microsoft PowerPoint Spreadsheet"
+	} else if strings.Contains(str, "xl/") && strings.Contains(str, "xml") {
+		return "Microsoft Excel Workbook"
+		// Some files have indication they are an Office file but the zip needs examined to tell what kind.
+	} else if strings.Contains(str, "_rels/.rels") || strings.Contains(str, "[Content_Types].xml") {
+
+		f, err := os.Open(file.Name())
+		if err != nil {
+			return "Error opening file"
+		}
+		defer f.Close()
+
+		// Check if the file is a ZIP archive
+		zipReader, err := zip.NewReader(f, info.Size())
+		if err != nil {
+			return "Unknown file type"
+		}
+
+		// Loop through the files in the ZIP archive
+		for _, zipFile := range zipReader.File {
+			if zipFile.Name == "word/document.xml" {
+				return "Microsoft Word"
+			} else if zipFile.Name == "xl/workbook.xml" {
+				return "Microsoft Excel"
+			} else if zipFile.Name == "ppt/presentation.xml" {
+				return "Microsoft PowerPoint"
+			}
+		}
+	}
+	return "Zip archive data"
 }
