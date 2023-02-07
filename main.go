@@ -182,6 +182,15 @@ func regularFile(filename string) {
 	} else if lenb > 16 &&
 		(HasPrefix(contentByte, "\x00\x00\x00\x20\x66\x74\x79\x70") || HasPrefix(contentByte, "\x00\x00\x00\x18\x66\x74\x79\x70") || HasPrefix(contentByte, "\x00\x00\x00\x14\x66\x74\x79\x70")) {
 		print("MP4 video file")
+	} else if lenb > 16 &&
+		(HasPrefix(contentByte, "\x52\x61\x72\x21\x1A\x07\x01\x00")) {
+		print("RAR archive data")
+	} else if lenb > 16 &&
+		(HasPrefix(contentByte, "\x37\x7A\xBC\xAF\x27\x1C")) {
+		print("7zip archive data")
+	} else if lenb > 16 &&
+		(HasPrefix(contentByte, "\x00\x00\x01\x00")) {
+		print("MS Windows icon resource")
 	}
 }
 
@@ -327,13 +336,8 @@ func doZip(file *os.File) string {
 	// Next, there are some other strings that seem to appear in Office documents of multiple types; For these,
 	// we will open the zip real quick and look for the Word, Excel, or PowerPoint xml file. Otherwise it is a regular zip.
 
-	// Open the file for reading
-	/*file, err := os.Open(os.Args[1])
-	if err != nil {
-		fmt.Println(err)
-		return "File error."
-	}
-	defer file.Close()*/
+	// NEED TO ADD: EPUB document format (also a type of zip archive)
+
 	info, err := file.Stat()
 	if err != nil {
 		fmt.Println("Error getting file info:", err)
@@ -351,7 +355,7 @@ func doZip(file *os.File) string {
 	// Convert the bytes to a string
 	str := string(buf[:])
 
-	// Some files have strings in the header indicating the Office program
+	// Some files have strings in the header indicating the type of Office program or document
 	if strings.Contains(str, "word/") && strings.Contains(str, "xml") {
 		return "Microsoft Word Document"
 	} else if strings.Contains(str, "ppt/theme") {
@@ -380,6 +384,20 @@ func doZip(file *os.File) string {
 				return "Microsoft Excel Workbook"
 			} else if zipFile.Name == "ppt/presentation.xml" {
 				return "Microsoft PowerPoint Presentation"
+			} else if zipFile.Name == "mimetype" {
+				file, err := zipFile.Open()
+				if err != nil {
+					return "Error opening file"
+				}
+				defer file.Close()
+				first20Bytes := make([]byte, 20)
+				_, err = file.Read(first20Bytes)
+				if err != nil {
+					return "Error reading first 20 bytes"
+				}
+				if strings.Contains(string(first20Bytes), "epub") {
+					return "EPUB document"
+				}
 			}
 		}
 	}
