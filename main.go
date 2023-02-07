@@ -10,6 +10,7 @@ import (
 	"archive/zip"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -23,7 +24,22 @@ func main() {
 		usage()
 	}
 
-	for _, filename := range os.Args[1:] {
+	// Expand the wildcard pattern into a list of file names
+	files, err := filepath.Glob(os.Args[1])
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	// Get the length of the longest file name
+	longestFileName := 0
+	for _, fileName := range files {
+		if len(fileName) > longestFileName {
+			longestFileName = len(fileName)
+		}
+	}
+
+	for _, filename := range files {
 		fi, err := os.Lstat(filename)
 		if err != nil {
 			print(filename + ": " + err.Error())
@@ -36,6 +52,10 @@ func main() {
 		}
 
 		print(filename + ": ")
+		// Add padding to make columns
+		for padding := 0; padding < longestFileName+2-len(filename); padding++ {
+			print(" ")
+		}
 
 		if fi.Mode()&os.ModeSymlink != 0 {
 			reallink, _ := os.Readlink(filename)
@@ -104,7 +124,7 @@ func regularFile(filename string) {
 		(HasPrefix(contentByte, "GIF87a") || HasPrefix(contentByte, "GIF89a")) {
 		print("GIF image data")
 	} else if lenb > 32 && HasPrefix(contentByte, "\xff\xd8") {
-		print("JPEG image data")
+		print("JPEG / jpg image data")
 	} else if lenb > 8 && HasPrefix(contentByte, "\xca\xfe\xba\xbe") {
 		print("Java class file")
 	} else if lenb > 8 && HasPrefix(contentByte, "dex\n") {
@@ -151,6 +171,17 @@ func regularFile(filename string) {
 	} else if lenb > 50 && HasPrefix(contentByte, "BM") &&
 		Equal(contentByte[6:10], "\x00\x00\x00\x00") {
 		print("BMP image")
+	} else if lenb > 50 && HasPrefix(contentByte, "\x25\x50\x44\x46") {
+		print("PDF image")
+	} else if lenb > 16 &&
+		(HasPrefix(contentByte, "\x49\x49\x2a\x00") || HasPrefix(contentByte, "\x4D\x4D\x00\x2a")) {
+		print("TIFF image data")
+	} else if lenb > 16 &&
+		(HasPrefix(contentByte, "ID3") || HasPrefix(contentByte, "\xff\xfb")) {
+		print("MP3 audio file")
+	} else if lenb > 16 &&
+		(HasPrefix(contentByte, "\x00\x00\x00\x20\x66\x74\x79\x70") || HasPrefix(contentByte, "\x00\x00\x00\x18\x66\x74\x79\x70") || HasPrefix(contentByte, "\x00\x00\x00\x14\x66\x74\x79\x70")) {
+		print("MP4 video file")
 	}
 }
 
@@ -257,7 +288,6 @@ func doElf(contentByte []byte) {
 }
 
 func HasPrefix(s []byte, prefix string) bool {
-	// print(s)
 	return len(s) >= len(prefix) && Equal(s[:len(prefix)], prefix)
 }
 
@@ -298,12 +328,12 @@ func doZip(file *os.File) string {
 	// we will open the zip real quick and look for the Word, Excel, or PowerPoint xml file. Otherwise it is a regular zip.
 
 	// Open the file for reading
-	file, err := os.Open(os.Args[1])
+	/*file, err := os.Open(os.Args[1])
 	if err != nil {
 		fmt.Println(err)
 		return "File error."
 	}
-	defer file.Close()
+	defer file.Close()*/
 	info, err := file.Stat()
 	if err != nil {
 		fmt.Println("Error getting file info:", err)
@@ -311,7 +341,7 @@ func doZip(file *os.File) string {
 	}
 
 	// Read the first 60 bytes from the file
-	var buf [600]byte
+	var buf [60]byte
 	_, err = file.Read(buf[:])
 	if err != nil {
 		fmt.Println(err)
@@ -320,6 +350,7 @@ func doZip(file *os.File) string {
 
 	// Convert the bytes to a string
 	str := string(buf[:])
+
 	// Some files have strings in the header indicating the Office program
 	if strings.Contains(str, "word/") && strings.Contains(str, "xml") {
 		return "Microsoft Word Document"
@@ -327,8 +358,8 @@ func doZip(file *os.File) string {
 		return "Microsoft PowerPoint Spreadsheet"
 	} else if strings.Contains(str, "xl/") && strings.Contains(str, "xml") {
 		return "Microsoft Excel Workbook"
-		// Some files have indication they are an Office file but the zip needs examined to tell what kind.
-	} else if strings.Contains(str, "_rels/.rels") || strings.Contains(str, "[Content_Types].xml") {
+		// Otherwise we will loop through looking for document, workbook, or presentation xml files
+	} else {
 
 		f, err := os.Open(file.Name())
 		if err != nil {
@@ -341,15 +372,14 @@ func doZip(file *os.File) string {
 		if err != nil {
 			return "Unknown file type"
 		}
-
 		// Loop through the files in the ZIP archive
 		for _, zipFile := range zipReader.File {
 			if zipFile.Name == "word/document.xml" {
-				return "Microsoft Word"
+				return "Microsoft Word Document"
 			} else if zipFile.Name == "xl/workbook.xml" {
-				return "Microsoft Excel"
+				return "Microsoft Excel Workbook"
 			} else if zipFile.Name == "ppt/presentation.xml" {
-				return "Microsoft PowerPoint"
+				return "Microsoft PowerPoint Presentation"
 			}
 		}
 	}
