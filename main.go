@@ -224,6 +224,10 @@ func regularFile(filename string) {
 		print("Google Webp file")
 	case lenb > 32 && HasPrefix(contentByte, "\x7B\x5C\x72\x74\x66\x31"):
 		print("Rich Text Format")
+	case lenb > 32 && (HasPrefix(contentByte, "<!DOCTYPE html") || (HasPrefix(contentByte, "<head>"))):
+		print("HTML document")
+	case lenb > 32 && (HasPrefix(contentByte, "<?xml version")):
+		print("XML document")
 	}
 }
 
