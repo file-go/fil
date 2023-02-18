@@ -172,7 +172,7 @@ func regularFile(filename string) {
 		(HasPrefix(contentByte, "\x49\x49\x2a\x00") || HasPrefix(contentByte, "\x4D\x4D\x00\x2a")):
 		print("TIFF image data")
 	case lenb > 16 &&
-		(HasPrefix(contentByte, "ID3") || HasPrefix(contentByte, "\xff\xfb")):
+		(HasPrefix(contentByte, "ID3") || HasPrefix(contentByte, "\xff\xfb") || HasPrefix(contentByte, "\xff\xf3") || HasPrefix(contentByte, "\xff\xf2")):
 		print("MP3 audio file")
 	case lenb > 16 &&
 		(HasPrefix(contentByte, "\x00\x00\x00\x20\x66\x74\x79\x70") || HasPrefix(contentByte, "\x00\x00\x00\x18\x66\x74\x79\x70") || HasPrefix(contentByte, "\x00\x00\x00\x14\x66\x74\x79\x70")):
@@ -207,6 +207,23 @@ func regularFile(filename string) {
 	case lenb > 16 &&
 		(HasPrefix(contentByte, "\x4D\x53\x43\x46")):
 		print("Microsoft Cabinet file")
+	case lenb > 16 &&
+		(HasPrefix(contentByte, "\x38\x42\x50\x53")):
+		print("Photoshop document")
+	case lenb > 32 && HasPrefix(contentByte, "RIF") &&
+		Equal(contentByte[8:11], "AVI"):
+		print("AVI file")
+	case lenb > 32 && HasPrefix(contentByte, "\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1"):
+		print("Microsoft Office (Legacy format)")
+	case lenb > 32 && HasPrefix(contentByte, "RIF") &&
+		Equal(contentByte[8:12], "WEBP"):
+		print("Google Webp file")
+	case lenb > 32 && HasPrefix(contentByte, "\x7B\x5C\x72\x74\x66\x31"):
+		print("Rich Text Format")
+	case lenb > 32 && (HasPrefix(contentByte, "<!DOCTYPE html") || (HasPrefix(contentByte, "<head>"))):
+		print("HTML document")
+	case lenb > 32 && (HasPrefix(contentByte, "<?xml version")):
+		print("XML document")
 	}
 }
 
