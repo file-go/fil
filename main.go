@@ -1,13 +1,16 @@
 /*-------------------------------------------------
 MIT Licence
-
 Maintainer: Joeky <jj16180339887@gmail.com>
 --------------------------------------------------*/
 
 package main
 
 import (
+	"archive/zip"
+	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 )
 
 const (
@@ -20,7 +23,22 @@ func main() {
 		usage()
 	}
 
-	for _, filename := range os.Args[1:] {
+	// Expand the wildcard pattern into a list of file names
+	files, err := filepath.Glob(os.Args[1])
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	// Get the length of the longest file name
+	longestFileName := 0
+	for _, fileName := range files {
+		if len(fileName) > longestFileName {
+			longestFileName = len(fileName)
+		}
+	}
+
+	for _, filename := range files {
 		fi, err := os.Lstat(filename)
 		if err != nil {
 			print(filename + ": " + err.Error())
@@ -33,6 +51,10 @@ func main() {
 		}
 
 		print(filename + ": ")
+		// Add padding to make columns
+		for padding := 0; padding < longestFileName+2-len(filename); padding++ {
+			print(" ")
+		}
 
 		if fi.Mode()&os.ModeSymlink != 0 {
 			reallink, _ := os.Readlink(filename)
@@ -47,8 +69,6 @@ func main() {
 			print("device file")
 		} else if fi.Mode()&os.ModeNamedPipe != 0 {
 			print("fifo")
-			// } else if fi.Mode()&os.ModeIrregular == 0 {
-			// 	regularFile(filename)
 		} else {
 			regularFile(filename)
 		}
@@ -78,9 +98,6 @@ func regularFile(filename string) {
 	var contentByte = make([]byte, MAX_BYTES_TO_READ)
 
 	numByte, _ := file.Read(contentByte)
-	// if err != nil && err != io.EOF {
-	// 	checkerr(err)
-	// }
 	contentByte = contentByte[:numByte]
 
 	lenb := len(contentByte)
@@ -90,47 +107,48 @@ func regularFile(filename string) {
 		magic = peekLe(contentByte[60:], 4)
 	}
 
-	if lenb >= 45 && HasPrefix(contentByte, "\x7FELF") {
+	switch {
+	case lenb >= 45 && HasPrefix(contentByte, "\x7FELF"):
 		print("Elf file ")
 		doElf(contentByte)
-	} else if lenb >= 8 && HasPrefix(contentByte, "!<arch>\n") {
+	case lenb >= 8 && HasPrefix(contentByte, "!<arch>\n"):
 		print("ar archive")
-	} else if lenb > 28 && HasPrefix(contentByte, "\x89PNG\x0d\x0a\x1a\x0a") {
+	case lenb > 28 && HasPrefix(contentByte, "\x89PNG\x0d\x0a\x1a\x0a"):
 		print("PNG image data")
-	} else if lenb > 16 &&
-		(HasPrefix(contentByte, "GIF87a") || HasPrefix(contentByte, "GIF89a")) {
+	case lenb > 16 &&
+		(HasPrefix(contentByte, "GIF87a") || HasPrefix(contentByte, "GIF89a")):
 		print("GIF image data")
-	} else if lenb > 32 && HasPrefix(contentByte, "\xff\xd8") {
-		print("JPEG image data")
-	} else if lenb > 8 && HasPrefix(contentByte, "\xca\xfe\xba\xbe") {
+	case lenb > 32 && HasPrefix(contentByte, "\xff\xd8"):
+		print("JPEG / jpg image data")
+	case lenb > 8 && HasPrefix(contentByte, "\xca\xfe\xba\xbe"):
 		print("Java class file")
-	} else if lenb > 8 && HasPrefix(contentByte, "dex\n") {
+	case lenb > 8 && HasPrefix(contentByte, "dex\n"):
 		print("Android dex file")
-	} else if lenb > 500 && Equal(contentByte[257:262], "ustar") {
+	case lenb > 500 && Equal(contentByte[257:262], "ustar"):
 		print("Posix tar archive")
-	} else if lenb > 5 && HasPrefix(contentByte, "PK\x03\x04") {
-		print("Zip archive data")
-	} else if lenb > 4 && HasPrefix(contentByte, "BZh") {
+	case lenb > 5 && HasPrefix(contentByte, "PK\x03\x04"):
+		print(doZip(file))
+	case lenb > 4 && HasPrefix(contentByte, "BZh"):
 		print("bzip2 compressed data")
-	} else if lenb > 10 && HasPrefix(contentByte, "\x1f\x8b") {
+	case lenb > 10 && HasPrefix(contentByte, "\x1f\x8b"):
 		print("gzip compressed data")
-	} else if lenb > 32 && Equal(contentByte[1:4], "\xfa\xed\xfe") {
+	case lenb > 32 && Equal(contentByte[1:4], "\xfa\xed\xfe"):
 		print("Mach-O")
-	} else if lenb > 36 && HasPrefix(contentByte, "OggS\x00\x02") {
+	case lenb > 36 && HasPrefix(contentByte, "OggS\x00\x02"):
 		print("Ogg data")
-	} else if lenb > 32 && HasPrefix(contentByte, "RIF") &&
-		Equal(contentByte[8:16], "WAVEfmt ") {
+	case lenb > 32 && HasPrefix(contentByte, "RIF") &&
+		Equal(contentByte[8:16], "WAVEfmt "):
 		print("WAV audio")
-	} else if lenb > 12 && HasPrefix(contentByte, "\x00\x01\x00\x00") {
+	case lenb > 12 && HasPrefix(contentByte, "\x00\x01\x00\x00"):
 		print("TrueType font")
-	} else if lenb > 12 && HasPrefix(contentByte, "ttcf\x00") {
+	case lenb > 12 && HasPrefix(contentByte, "ttcf\x00"):
 		print("TrueType font collection")
-	} else if lenb > 4 && HasPrefix(contentByte, "BC\xc0\xde") {
+	case lenb > 4 && HasPrefix(contentByte, "BC\xc0\xde"):
 		print("LLVM IR bitcode")
-	} else if HasPrefix(contentByte, "-----BEGIN CERTIFICATE-----") {
+	case HasPrefix(contentByte, "-----BEGIN CERTIFICATE-----"):
 		print("PEM certificate")
-	} else if magic != -1 && HasPrefix(contentByte, "MZ") && magic < lenb-4 &&
-		Equal(contentByte[magic:magic+4], "\x50\x45\x00\x00") {
+	case magic != -1 && HasPrefix(contentByte, "MZ") && magic < lenb-4 &&
+		Equal(contentByte[magic:magic+4], "\x50\x45\x00\x00"):
 
 		print("MS executable")
 		if peekLe(contentByte[magic+22:], 2)&0x2000 != 0 {
@@ -145,9 +163,67 @@ func regularFile(filename string) {
 				print(types[tp])
 			}
 		}
-	} else if lenb > 50 && HasPrefix(contentByte, "BM") &&
-		Equal(contentByte[6:10], "\x00\x00\x00\x00") {
+	case lenb > 50 && HasPrefix(contentByte, "BM") &&
+		Equal(contentByte[6:10], "\x00\x00\x00\x00"):
 		print("BMP image")
+	case lenb > 50 && HasPrefix(contentByte, "\x25\x50\x44\x46"):
+		print("PDF image")
+	case lenb > 16 &&
+		(HasPrefix(contentByte, "\x49\x49\x2a\x00") || HasPrefix(contentByte, "\x4D\x4D\x00\x2a")):
+		print("TIFF image data")
+	case lenb > 16 &&
+		(HasPrefix(contentByte, "ID3") || HasPrefix(contentByte, "\xff\xfb") || HasPrefix(contentByte, "\xff\xf3") || HasPrefix(contentByte, "\xff\xf2")):
+		print("MP3 audio file")
+	case lenb > 16 &&
+		(HasPrefix(contentByte, "\x00\x00\x00\x20\x66\x74\x79\x70") || HasPrefix(contentByte, "\x00\x00\x00\x18\x66\x74\x79\x70") || HasPrefix(contentByte, "\x00\x00\x00\x14\x66\x74\x79\x70")):
+		print("MP4 video file")
+	case lenb > 16 &&
+		(HasPrefix(contentByte, "\x52\x61\x72\x21\x1A\x07\x01\x00")):
+		print("RAR archive data")
+	case lenb > 16 &&
+		(HasPrefix(contentByte, "\x37\x7A\xBC\xAF\x27\x1C")):
+		print("7zip archive data")
+	case lenb > 16 &&
+		(HasPrefix(contentByte, "\x00\x00\x01\x00")):
+		print("MS Windows icon resource")
+	case lenb > 16 &&
+		(HasPrefix(contentByte, "\x53\x51\x4C\x69\x74\x65\x20\x66\x6F\x72\x6D\x61\x74\x20\x33\x00")):
+		print("SQLite database")
+	case lenb > 16 &&
+		(HasPrefix(contentByte, "\x0A\x0D\x0D\x0A")):
+		print("PCAP-ng capture file")
+	case lenb > 16 &&
+		(HasPrefix(contentByte, "\xD4\xC3\xB2\xA1") || HasPrefix(contentByte, "\xA1\xB2\xC3\xD4") || HasPrefix(contentByte, "\x4D\x3C\xB2\xA1") || HasPrefix(contentByte, "\xA1\xB2\x3C\x4D")):
+		print("PCAP capture file")
+	case lenb > 16 &&
+		(HasPrefix(contentByte, "\x66\x4C\x61\x43")):
+		print("FLAC audio format")
+	case lenb > 16 &&
+		(HasPrefix(contentByte, "\x54\x44\x46\x24")):
+		print("Telegram Desktop file")
+	case lenb > 16 &&
+		(HasPrefix(contentByte, "\x54\x44\x45\x46")):
+		print("Telegram Desktop encrypted file")
+	case lenb > 16 &&
+		(HasPrefix(contentByte, "\x4D\x53\x43\x46")):
+		print("Microsoft Cabinet file")
+	case lenb > 16 &&
+		(HasPrefix(contentByte, "\x38\x42\x50\x53")):
+		print("Photoshop document")
+	case lenb > 32 && HasPrefix(contentByte, "RIF") &&
+		Equal(contentByte[8:11], "AVI"):
+		print("AVI file")
+	case lenb > 32 && HasPrefix(contentByte, "\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1"):
+		print("Microsoft Office (Legacy format)")
+	case lenb > 32 && HasPrefix(contentByte, "RIF") &&
+		Equal(contentByte[8:12], "WEBP"):
+		print("Google Webp file")
+	case lenb > 32 && HasPrefix(contentByte, "\x7B\x5C\x72\x74\x66\x31"):
+		print("Rich Text Format")
+	case lenb > 32 && (HasPrefix(contentByte, "<!DOCTYPE html") || (HasPrefix(contentByte, "<head>"))):
+		print("HTML document")
+	case lenb > 32 && (HasPrefix(contentByte, "<?xml version")):
+		print("XML document")
 	}
 }
 
@@ -182,9 +258,9 @@ func doElf(contentByte []byte) {
 
 	switch bits {
 	case 1:
-		print("32bit ")
+		print("32-bit ")
 	case 2:
-		print("64bit ")
+		print("64-bit ")
 	}
 
 	switch endian {
@@ -222,14 +298,11 @@ func doElf(contentByte []byte) {
 	phentsize := elfint(contentByte[42+12*bits:], 2)
 	phnum := elfint(contentByte[44+12*bits:], 2)
 	phoff := elfint(contentByte[28+4*bits:], 4+4*bits)
-	// shsize 		:= elfint(contentByte[46+12*bits:], 2)
-	// shnum 		:= elfint(contentByte[48+12*bits:], 2)
-	// shoff 		:= elfint(contentByte[32+8*bits:], 4+4*bits)
+
 	dynamic := false
 
 	for i := 0; i < phnum; i++ {
 		phdr := contentByte[phoff+i*phentsize:]
-		// char *phdr = map+phoff+i*phentsize;
 		p_type := elfint(phdr, 4)
 
 		dynamic = (p_type == 2) || dynamic /*PT_DYNAMIC*/
@@ -237,14 +310,8 @@ func doElf(contentByte []byte) {
 			continue
 		}
 
-		// j = bits+1
-		// p_offset := elfint(phdr[4*j:], 4*j)
-		// p_filesz := elfint(phdr[16*j:], 4*j)
-
 		if p_type == 3 /*PT_INTERP*/ {
 			print(", dynamically linked")
-			//   print(p_filesz)
-			//   print(contentByte[p_offset*2:])
 		}
 	}
 
@@ -285,4 +352,77 @@ func peekBe(c []byte, size int) int {
 		ret = (ret << 8) | (int64(c[i]) & 0xff)
 	}
 	return int(ret)
+}
+
+func doZip(file *os.File) string {
+	// Function distinguishes between Office XML documents and regular zip files.
+	// First read the intial bytes of the file, and see if common Word, Excel, Powerpoint strings are present.
+	// Next, there are some other strings that seem to appear in Office documents of multiple types; For these,
+	// we will open the zip real quick and look for the Word, Excel, PowerPoint xml file, or epub mimetype file. Otherwise it is a regular zip.
+
+	info, err := file.Stat()
+	if err != nil {
+		fmt.Println("Error getting file info:", err)
+		return ("File error")
+	}
+
+	// Read the first 60 bytes from the file
+	var buf [60]byte
+	_, err = file.Read(buf[:])
+	if err != nil {
+		fmt.Println(err)
+		return "File error."
+	}
+
+	// Convert the bytes to a string
+	str := string(buf[:])
+
+	// Some files have strings in the header indicating the type of Office program or document
+	if strings.Contains(str, "word/") && strings.Contains(str, "xml") {
+		return "Microsoft Word 2007+"
+	} else if strings.Contains(str, "ppt/theme") {
+		return "Microsoft PowerPoint 2007+"
+	} else if strings.Contains(str, "xl/") && strings.Contains(str, "xml") {
+		return "Microsoft Excel 2007+"
+		// Otherwise we will open zip and look for document, workbook, or presentation xml files
+	} else {
+
+		f, err := os.Open(file.Name())
+		if err != nil {
+			return "Error opening file"
+		}
+		defer f.Close()
+
+		// Check if the file is a ZIP archive
+		zipReader, err := zip.NewReader(f, info.Size())
+		if err != nil {
+			return "Unknown file type"
+		}
+		// Loop through the files in the ZIP archive
+		for _, zipFile := range zipReader.File {
+			if zipFile.Name == "word/document.xml" {
+				return "Microsoft Word 2007+"
+			} else if zipFile.Name == "xl/workbook.xml" {
+				return "Microsoft Excel 2007+"
+			} else if zipFile.Name == "ppt/presentation.xml" {
+				return "Microsoft PowerPoint 2007+"
+			} else if zipFile.Name == "mimetype" {
+				file, err := zipFile.Open()
+				if err != nil {
+					return "Error opening file"
+				}
+				defer file.Close()
+				// Check for ePub format
+				first20Bytes := make([]byte, 20)
+				_, err = file.Read(first20Bytes)
+				if err != nil {
+					return "Error reading first 20 bytes"
+				}
+				if strings.Contains(string(first20Bytes), "epub") {
+					return "EPUB document"
+				}
+			}
+		}
+	}
+	return "Zip archive data"
 }
