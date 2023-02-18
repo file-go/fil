@@ -367,7 +367,7 @@ func doZip(file *os.File) string {
 		return "Microsoft PowerPoint 2007+"
 	} else if strings.Contains(str, "xl/") && strings.Contains(str, "xml") {
 		return "Microsoft Excel 2007+"
-		// Otherwise we will loop through looking for document, workbook, or presentation xml files
+		// Otherwise we will open zip and look for document, workbook, or presentation xml files
 	} else {
 
 		f, err := os.Open(file.Name())
@@ -395,6 +395,7 @@ func doZip(file *os.File) string {
 					return "Error opening file"
 				}
 				defer file.Close()
+				// Check for ePub format
 				first20Bytes := make([]byte, 20)
 				_, err = file.Read(first20Bytes)
 				if err != nil {
