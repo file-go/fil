@@ -1,10 +1,6 @@
 /*-------------------------------------------------
 MIT Licence
-Maintained by: github.com/presack
-
-Forked from:
-Joeky <jj16180339887@gmail.com>
-
+Maintainer: Joeky <jj16180339887@gmail.com>
 --------------------------------------------------*/
 
 package main
