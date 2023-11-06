@@ -1,0 +1,65 @@
+# This workflow will build a golang project
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
+
+name: Latest Release
+
+on:
+  push:
+    tags:
+      - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
+
+defaults:
+  run:
+    shell: bash
+
+# https://github.com/softprops/action-gh-release/issues/236
+# GitHub release failed with status: 403
+permissions:
+  contents: write
+
+jobs:
+
+  release:
+    strategy:
+      matrix:
+        # List of GOOS and GOARCH pairs from `go tool dist list`
+        goosarch:
+          - 'linux/amd64'
+          - 'linux/arm64'
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+
+    - name: Get OS and arch info
+      run: |
+        GOOSARCH=${{matrix.goosarch}}
+        GOOS=${GOOSARCH%/*}
+        GOARCH=${GOOSARCH#*/}
+        ZIP_NAME=${{ github.event.repository.name }}-$GOARCH-$GOOS.zip
+        echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
+        echo "GOOS=$GOOS" >> $GITHUB_ENV
+        echo "GOARCH=$GOARCH" >> $GITHUB_ENV
+        echo "CGO_ENABLED=0" >> $GITHUB_ENV
+
+    - name: Build
+      run: |
+        go build -o "${{ github.event.repository.name }}" -v
+        zip "$ZIP_NAME" "${{ github.event.repository.name }}"
+
+    - name: Release Notes
+      run:
+        git log $(git describe HEAD~ --tags --abbrev=0)..HEAD --pretty='format:* %h %s%n  * %an <%ae>' --no-merges >> ".github/RELEASE-TEMPLATE.md"
+
+    - name: Release with Notes
+      uses: softprops/action-gh-release@v1
+      with:
+        body_path: ".github/RELEASE-TEMPLATE.md"
+        # draft: false
+        files: ${{env.ZIP_NAME}}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
