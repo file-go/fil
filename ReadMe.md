@@ -1,11 +1,8 @@
-[@joeky888](https://github.com/joeky888) needs `file` command on Windows, so he made one.
-
 ![Screen shot](https://i.imgur.com/Ike5iIJ.png)
 
 ### Features
 
 * Pure Go, static binary without [libmagic](http://darwinsys.com/file)
-* Lightweight, The only dependency is [os](https://golang.org/pkg/os)
 * Cross-platform: No unix specific code like [mmap](https://godoc.org/golang.org/x/exp/mmap)
 
 ### Install binary
@@ -15,7 +12,7 @@ Download from https://github.com/joeky888/fil/releases
 ### Install from source
 
 ```sh
-go get -u github.com/joeky888/fil
+go install github.com/joeky888/fil
 ```
 
 ### Usage
