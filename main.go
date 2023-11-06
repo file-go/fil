@@ -1,6 +1,6 @@
 /*-------------------------------------------------
 MIT Licence
-Maintainer: Joeky <jj16180339887@gmail.com>
+Maintainer: Joeky <joeky5888@gmail.com>
 --------------------------------------------------*/
 
 package main
@@ -150,7 +150,20 @@ func regularFile(filename string) {
 	case magic != -1 && HasPrefix(contentByte, "MZ") && magic < lenb-4 &&
 		Equal(contentByte[magic:magic+4], "\x50\x45\x00\x00"):
 
-		print("MS executable")
+		// Linux kernel images look like PE files.
+		if Equal(contentByte[56:60], "ARMd") {
+			print("Linux arm64 kernel image")
+			return
+		} else if Equal(contentByte[514:518], "HdrS") {
+			print("Linux x86-64 kernel image")
+			return
+		}
+
+		print("MS PE32")
+		if peekLe(contentByte[magic+24:], 2) == 0x20b {
+			print("+")
+		}
+		print(" executable")
 		if peekLe(contentByte[magic+22:], 2)&0x2000 != 0 {
 			print("(DLL)")
 		}
@@ -161,7 +174,14 @@ func regularFile(filename string) {
 			tp := peekLe(contentByte[magic+92:], 2)
 			if tp > 0 && tp < len(types) {
 				print(types[tp])
+			} else {
+				print("unknown")
 			}
+		}
+
+		print(" x86")
+		if peekLe(contentByte[magic+4:], 2) != 0x14c {
+			print("-64")
 		}
 	case lenb > 50 && HasPrefix(contentByte, "BM") &&
 		Equal(contentByte[6:10], "\x00\x00\x00\x00"):
