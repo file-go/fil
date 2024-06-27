@@ -7,12 +7,12 @@
 
 ### Install binary
 
-Download from https://github.com/joeky888/fil/releases
+Download from https://github.com/app-fast/fil/releases
 
 ### Install from source
 
 ```sh
-go install github.com/joeky888/fil
+go install github.com/app-fast/fil
 ```
 
 ### Usage
