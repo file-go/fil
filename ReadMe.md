@@ -12,7 +12,7 @@ Download from https://github.com/app-fast/fil/releases
 ### Install from source
 
 ```sh
-go install github.com/app-fast/fil
+go install github.com/app-fast/fil@latest
 ```
 
 ### Usage
