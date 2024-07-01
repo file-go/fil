@@ -179,9 +179,16 @@ func regularFile(filename string) {
 			}
 		}
 
-		print(" x86")
-		if peekLe(contentByte[magic+4:], 2) != 0x14c {
-			print("-64")
+		// Ref: https://learn.microsoft.com/en-us/windows/win32/debug/pe-format
+		switch peekLe(contentByte[magic+4:], 2) {
+		case 0x1c0:
+			print(" arm")
+		case 0xaa64:
+			print(" aarch64")
+		case 0x14c:
+			print(" Intel 80386")
+		case 0x8664:
+			print(" amd64")
 		}
 	case lenb > 50 && HasPrefix(contentByte, "BM") &&
 		Equal(contentByte[6:10], "\x00\x00\x00\x00"):
