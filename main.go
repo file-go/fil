@@ -800,6 +800,10 @@ func doZip(file *os.File) string {
 	// Next, there are some other strings that seem to appear in Office documents of multiple types; For these,
 	// we will open the zip real quick and look for the Word, Excel, PowerPoint xml file, or epub mimetype file. Otherwise it is a regular zip.
 
+	if _, err := file.Seek(0, 0); err != nil {
+		return "File error"
+	}
+
 	info, err := file.Stat()
 	if err != nil {
 		fmt.Println("Error getting file info:", err)
