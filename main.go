@@ -671,6 +671,10 @@ func regularFile(filename string) {
 
 	lenb := len(contentByte)
 	/*---------------Read file end------------------------*/
+	if desc := describeByExtension(filename, contentByte); desc != "" {
+		fmt.Print(desc)
+		return
+	}
 	magic := -1
 	if lenb > 112 {
 		magic = peekLe(contentByte[60:], 4)
@@ -682,6 +686,33 @@ func regularFile(filename string) {
 			return
 		}
 	}
+}
+
+func describeByExtension(filename string, contentByte []byte) string {
+	ext := strings.ToLower(filepath.Ext(filename))
+	if ext == "" {
+		return ""
+	}
+
+	contentLower := strings.ToLower(string(contentByte))
+
+	switch ext {
+	case ".eml":
+		// Basic sanity check: common RFC 5322 headers
+		if strings.Contains(contentLower, "\ndate:") && strings.Contains(contentLower, "\nfrom:") {
+			return "Email message (EML)"
+		}
+	case ".ovpn":
+		// Common OpenVPN config directives
+		if strings.Contains(contentLower, "\nclient") ||
+			strings.Contains(contentLower, "\nremote ") ||
+			strings.Contains(contentLower, "\nproto ") ||
+			strings.Contains(contentLower, "\ndev ") {
+			return "OpenVPN configuration"
+		}
+	}
+
+	return ""
 }
 
 func doElf(contentByte []byte) string {
