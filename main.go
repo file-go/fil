@@ -119,6 +119,46 @@ var matchers = []fileMatcher{
 		},
 	},
 	{
+		name:   "vmdk",
+		minLen: 4,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb >= 4 && HasPrefix(b, "KDMV")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "VMware virtual disk"
+		},
+	},
+	{
+		name:   "vmsn",
+		minLen: 6,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb >= 6 && HasPrefix(b, "#!VMSN")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "VMware snapshot state"
+		},
+	},
+	{
+		name:   "vmx",
+		minLen: 7,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb >= 7 && HasPrefix(b, "#!/conf")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "VMware VM configuration"
+		},
+	},
+	{
+		name:   "vmxf",
+		minLen: 6,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb >= 6 && HasPrefix(b, "<vmxf>")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "VMware supplemental configuration"
+		},
+	},
+	{
 		name:   "bzip2",
 		minLen: 5,
 		match: func(b []byte, lenb int, magic int) bool {
