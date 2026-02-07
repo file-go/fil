@@ -9,6 +9,7 @@ import (
 	"archive/tar"
 	"archive/zip"
 	"bytes"
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -587,14 +588,18 @@ var matchers = []fileMatcher{
 }
 
 func main() {
-	if len(os.Args) == 1 {
+	brief := flag.Bool("b", false, "brief output (type only)")
+	flag.Usage = usage
+	flag.Parse()
+
+	if flag.NArg() == 0 {
 		usage()
 	}
 
 	// Expand the wildcard pattern into a list of file names
-	files, err := filepath.Glob(os.Args[1])
+	files, err := filepath.Glob(flag.Arg(0))
 	if err != nil {
-		fmt.Println(err)
+		fmt.Fprintln(os.Stderr, err)
 		return
 	}
 
@@ -609,19 +614,21 @@ func main() {
 	for _, filename := range files {
 		fi, err := os.Lstat(filename)
 		if err != nil {
-			fmt.Print(filename + ": " + err.Error())
+			fmt.Fprintln(os.Stderr, filename+": "+err.Error())
 			continue
 		}
 
 		if len(filename) > MaxFileLength {
-			fmt.Print("File name too long.")
+			fmt.Fprintln(os.Stderr, "File name too long.")
 			continue
 		}
 
-		fmt.Print(filename + ": ")
-		// Add padding to make columns
-		for padding := 0; padding < longestFileName+2-len(filename); padding++ {
-			fmt.Print(" ")
+		if !*brief {
+			fmt.Print(filename + ": ")
+			// Add padding to make columns
+			for padding := 0; padding < longestFileName+2-len(filename); padding++ {
+				fmt.Print(" ")
+			}
 		}
 
 		switch {
@@ -646,7 +653,8 @@ func main() {
 }
 
 func usage() {
-	fmt.Println("Usage: fil FILE_NAME")
+	fmt.Println("Usage: fil [-b] FILE_NAME")
+	fmt.Println("  -b    brief output (type only)")
 	os.Exit(0)
 }
 
@@ -655,7 +663,7 @@ func regularFile(filename string) {
 	/*---------------Read file------------------------*/
 	file, err := os.OpenFile(filename, os.O_RDONLY, 0666)
 	if err != nil {
-		fmt.Print("File error.")
+		fmt.Fprint(os.Stderr, "File error.")
 		return
 	}
 	defer file.Close()
@@ -664,7 +672,7 @@ func regularFile(filename string) {
 
 	numByte, err := file.Read(contentByte)
 	if err != nil && err != io.EOF {
-		fmt.Print("File error.")
+		fmt.Fprint(os.Stderr, "File error.")
 		return
 	}
 	contentByte = contentByte[:numByte]
@@ -857,7 +865,7 @@ func doZip(file *os.File) string {
 
 	info, err := file.Stat()
 	if err != nil {
-		fmt.Println("Error getting file info:", err)
+		fmt.Fprintln(os.Stderr, "Error getting file info:", err)
 		return ("File error")
 	}
 
@@ -865,7 +873,7 @@ func doZip(file *os.File) string {
 	var buf [60]byte
 	n, err := file.Read(buf[:])
 	if err != nil && err != io.EOF {
-		fmt.Println(err)
+		fmt.Fprintln(os.Stderr, err)
 		return "File error."
 	}
 
