@@ -1,0 +1,52 @@
+version: "2"
+
+run:
+  allow-parallel-runners: true
+  timeout: 5m
+
+linters:
+  default: none
+  enable:
+    - govet
+    - ineffassign
+    - unused
+    - paralleltest
+    - staticcheck
+    - gocritic
+    - errchkjson
+    - rowserrcheck
+    - errcheck
+    - revive
+  settings:
+    errcheck:
+      exclude-functions: # To exclude more Close funcs, use `errcheck -verbose ./...` to get function names
+        - (*os.File).Close
+        - (io.Closer).Close
+    revive:
+      enable-all-rules: false
+      severity: error
+      rules: # From https://github.com/mgechev/revive/blob/master/defaults.toml
+        - name: atomic
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+        - name: empty-block
+        - name: error-naming
+        - name: error-return
+        - name: error-strings
+        - name: errorf
+        - name: increment-decrement
+        - name: indent-error-flow
+        - name: range
+        - name: receiver-naming
+        - name: redefines-builtin-id
+        - name: superfluous-else
+        - name: time-naming
+        - name: unexported-return
+        - name: unreachable-code
+        - name: var-declaration
+        - name: var-naming
+
+issues:
+  fix: false
