@@ -1,6 +1,6 @@
 /*-------------------------------------------------
 MIT Licence
-Maintainer: Joeky <jj16180339887@gmail.com>
+Maintainer: Joeky <joeky5888@gmail.com>
 --------------------------------------------------*/
 
 package main
@@ -14,9 +14,434 @@ import (
 )
 
 const (
-	MAX_FILENAME_LENGTH = 256
-	MAX_BYTES_TO_READ   = 2 * 1024 // 2KB buffer to read file
+	MaxFileLength  = 256
+	MaxBytesToRead = 2 * 1024 // 2KB buffer to read file
 )
+
+type fileMatcher struct {
+	name     string
+	minLen   int
+	match    func([]byte, int, int) bool
+	describe func([]byte, int, int, *os.File) string
+}
+
+var matchers = []fileMatcher{
+	{
+		name:   "elf",
+		minLen: 45,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb >= 45 && HasPrefix(b, "\x7FELF")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "Elf file " + doElf(b)
+		},
+	},
+	{
+		name:   "ar",
+		minLen: 8,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb >= 8 && HasPrefix(b, "!<arch>\n")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "ar archive"
+		},
+	},
+	{
+		name:   "png",
+		minLen: 29,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb > 28 && HasPrefix(b, "\x89PNG\x0d\x0a\x1a\x0a")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "PNG image data"
+		},
+	},
+	{
+		name:   "gif",
+		minLen: 17,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb > 16 && (HasPrefix(b, "GIF87a") || HasPrefix(b, "GIF89a"))
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "GIF image data"
+		},
+	},
+	{
+		name:   "jpeg",
+		minLen: 33,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb > 32 && HasPrefix(b, "\xff\xd8")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "JPEG / jpg image data"
+		},
+	},
+	{
+		name:   "java-class",
+		minLen: 9,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb > 8 && HasPrefix(b, "\xca\xfe\xba\xbe")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "Java class file"
+		},
+	},
+	{
+		name:   "dex",
+		minLen: 9,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb > 8 && HasPrefix(b, "dex\n")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "Android dex file"
+		},
+	},
+	{
+		name:   "tar",
+		minLen: 501,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb > 500 && Equal(b[257:262], "ustar")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "Posix tar archive"
+		},
+	},
+	{
+		name:   "zip",
+		minLen: 6,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb > 5 && HasPrefix(b, "PK\x03\x04")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return doZip(file)
+		},
+	},
+	{
+		name:   "bzip2",
+		minLen: 5,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb > 4 && HasPrefix(b, "BZh")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "bzip2 compressed data"
+		},
+	},
+	{
+		name:   "gzip",
+		minLen: 11,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb > 10 && HasPrefix(b, "\x1f\x8b")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "gzip compressed data"
+		},
+	},
+	{
+		name:   "macho",
+		minLen: 33,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb > 32 && Equal(b[1:4], "\xfa\xed\xfe")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "Mach-O"
+		},
+	},
+	{
+		name:   "ogg",
+		minLen: 37,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb > 36 && HasPrefix(b, "OggS\x00\x02")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "Ogg data"
+		},
+	},
+	{
+		name:   "wav",
+		minLen: 33,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb > 32 && HasPrefix(b, "RIF") && Equal(b[8:16], "WAVEfmt ")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "WAV audio"
+		},
+	},
+	{
+		name:   "ttf",
+		minLen: 13,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb > 12 && HasPrefix(b, "\x00\x01\x00\x00")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "TrueType font"
+		},
+	},
+	{
+		name:   "ttf-collection",
+		minLen: 13,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb > 12 && HasPrefix(b, "ttcf\x00")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "TrueType font collection"
+		},
+	},
+	{
+		name:   "llvm-bitcode",
+		minLen: 5,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb > 4 && HasPrefix(b, "BC\xc0\xde")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "LLVM IR bitcode"
+		},
+	},
+	{
+		name:   "pem",
+		minLen: len("-----BEGIN CERTIFICATE-----"),
+		match: func(b []byte, lenb int, magic int) bool {
+			return HasPrefix(b, "-----BEGIN CERTIFICATE-----")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "PEM certificate"
+		},
+	},
+	{
+		name:   "pe",
+		minLen: 64,
+		match: func(b []byte, lenb int, magic int) bool {
+			return magic != -1 && HasPrefix(b, "MZ") && magic < lenb-4 &&
+				Equal(b[magic:magic+4], "\x50\x45\x00\x00")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return describePE(b, magic)
+		},
+	},
+	{
+		name:   "bmp",
+		minLen: 51,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb > 50 && HasPrefix(b, "BM") && Equal(b[6:10], "\x00\x00\x00\x00")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "BMP image"
+		},
+	},
+	{
+		name:   "pdf",
+		minLen: 51,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb > 50 && HasPrefix(b, "\x25\x50\x44\x46")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "PDF image"
+		},
+	},
+	{
+		name:   "tiff",
+		minLen: 17,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb > 16 &&
+				(HasPrefix(b, "\x49\x49\x2a\x00") || HasPrefix(b, "\x4D\x4D\x00\x2a"))
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "TIFF image data"
+		},
+	},
+	{
+		name:   "mp3",
+		minLen: 17,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb > 16 &&
+				(HasPrefix(b, "ID3") || HasPrefix(b, "\xff\xfb") || HasPrefix(b, "\xff\xf3") || HasPrefix(b, "\xff\xf2"))
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "MP3 audio file"
+		},
+	},
+	{
+		name:   "mp4",
+		minLen: 17,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb > 16 &&
+				(HasPrefix(b, "\x00\x00\x00\x20\x66\x74\x79\x70") || HasPrefix(b, "\x00\x00\x00\x18\x66\x74\x79\x70") || HasPrefix(b, "\x00\x00\x00\x14\x66\x74\x79\x70"))
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "MP4 video file"
+		},
+	},
+	{
+		name:   "rar",
+		minLen: 17,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb > 16 && HasPrefix(b, "\x52\x61\x72\x21\x1A\x07\x01\x00")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "RAR archive data"
+		},
+	},
+	{
+		name:   "7zip",
+		minLen: 17,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb > 16 && HasPrefix(b, "\x37\x7A\xBC\xAF\x27\x1C")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "7zip archive data"
+		},
+	},
+	{
+		name:   "ico",
+		minLen: 17,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb > 16 && HasPrefix(b, "\x00\x00\x01\x00")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "MS Windows icon resource"
+		},
+	},
+	{
+		name:   "sqlite",
+		minLen: 17,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb > 16 && HasPrefix(b, "\x53\x51\x4C\x69\x74\x65\x20\x66\x6F\x72\x6D\x61\x74\x20\x33\x00")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "SQLite database"
+		},
+	},
+	{
+		name:   "pcapng",
+		minLen: 17,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb > 16 && HasPrefix(b, "\x0A\x0D\x0D\x0A")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "PCAP-ng capture file"
+		},
+	},
+	{
+		name:   "pcap",
+		minLen: 17,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb > 16 &&
+				(HasPrefix(b, "\xD4\xC3\xB2\xA1") || HasPrefix(b, "\xA1\xB2\xC3\xD4") || HasPrefix(b, "\x4D\x3C\xB2\xA1") || HasPrefix(b, "\xA1\xB2\x3C\x4D"))
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "PCAP capture file"
+		},
+	},
+	{
+		name:   "flac",
+		minLen: 17,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb > 16 && HasPrefix(b, "\x66\x4C\x61\x43")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "FLAC audio format"
+		},
+	},
+	{
+		name:   "tdf",
+		minLen: 17,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb > 16 && HasPrefix(b, "\x54\x44\x46\x24")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "Telegram Desktop file"
+		},
+	},
+	{
+		name:   "tdef",
+		minLen: 17,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb > 16 && HasPrefix(b, "\x54\x44\x45\x46")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "Telegram Desktop encrypted file"
+		},
+	},
+	{
+		name:   "cab",
+		minLen: 17,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb > 16 && HasPrefix(b, "\x4D\x53\x43\x46")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "Microsoft Cabinet file"
+		},
+	},
+	{
+		name:   "psd",
+		minLen: 17,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb > 16 && HasPrefix(b, "\x38\x42\x50\x53")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "Photoshop document"
+		},
+	},
+	{
+		name:   "avi",
+		minLen: 33,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb > 32 && HasPrefix(b, "RIF") && Equal(b[8:11], "AVI")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "AVI file"
+		},
+	},
+	{
+		name:   "ole",
+		minLen: 33,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb > 32 && HasPrefix(b, "\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "Microsoft Office (Legacy format)"
+		},
+	},
+	{
+		name:   "webp",
+		minLen: 33,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb > 32 && HasPrefix(b, "RIF") && Equal(b[8:12], "WEBP")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "Google Webp file"
+		},
+	},
+	{
+		name:   "rtf",
+		minLen: 33,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb > 32 && HasPrefix(b, "\x7B\x5C\x72\x74\x66\x31")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "Rich Text Format"
+		},
+	},
+	{
+		name:   "html",
+		minLen: 33,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb > 32 && (HasPrefix(b, "<!DOCTYPE html") || HasPrefix(b, "<head>"))
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "HTML document"
+		},
+	},
+	{
+		name:   "xml",
+		minLen: 33,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb > 32 && HasPrefix(b, "<?xml version")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "XML document"
+		},
+	},
+}
 
 func main() {
 	if len(os.Args) == 1 {
@@ -41,50 +466,44 @@ func main() {
 	for _, filename := range files {
 		fi, err := os.Lstat(filename)
 		if err != nil {
-			print(filename + ": " + err.Error())
+			fmt.Print(filename + ": " + err.Error())
 			continue
 		}
 
-		if len(filename) > MAX_FILENAME_LENGTH {
-			print("File name too long.")
+		if len(filename) > MaxFileLength {
+			fmt.Print("File name too long.")
 			continue
 		}
 
-		print(filename + ": ")
+		fmt.Print(filename + ": ")
 		// Add padding to make columns
 		for padding := 0; padding < longestFileName+2-len(filename); padding++ {
-			print(" ")
+			fmt.Print(" ")
 		}
 
-		if fi.Mode()&os.ModeSymlink != 0 {
+		switch {
+		case fi.Mode()&os.ModeSymlink != 0:
 			reallink, _ := os.Readlink(filename)
-			print("symbolic link to " + reallink)
-		} else if fi.Mode()&os.ModeDir != 0 {
-			print("directory")
-		} else if fi.Mode()&os.ModeSocket != 0 {
-			print("socket")
-		} else if fi.Mode()&os.ModeCharDevice != 0 {
-			print("character special device")
-		} else if fi.Mode()&os.ModeDevice != 0 {
-			print("device file")
-		} else if fi.Mode()&os.ModeNamedPipe != 0 {
-			print("fifo")
-		} else {
+			fmt.Print("symbolic link to " + reallink)
+		case fi.Mode()&os.ModeDir != 0:
+			fmt.Print("directory")
+		case fi.Mode()&os.ModeSocket != 0:
+			fmt.Print("socket")
+		case fi.Mode()&os.ModeCharDevice != 0:
+			fmt.Print("character special device")
+		case fi.Mode()&os.ModeDevice != 0:
+			fmt.Print("device file")
+		case fi.Mode()&os.ModeNamedPipe != 0:
+			fmt.Print("fifo")
+		default:
 			regularFile(filename)
 		}
-		println()
-	}
-}
-
-func checkerr(e error) {
-	if e != nil {
-		print(e.Error())
-		os.Exit(1)
+		fmt.Println()
 	}
 }
 
 func usage() {
-	println("Usage: fil FILE_NAME")
+	fmt.Println("Usage: fil FILE_NAME")
 	os.Exit(0)
 }
 
@@ -92,10 +511,10 @@ func regularFile(filename string) {
 
 	/*---------------Read file------------------------*/
 	file, _ := os.OpenFile(filename, os.O_RDONLY, 0666)
-	// checkerr(err)
 	defer file.Close()
 
-	var contentByte = make([]byte, MAX_BYTES_TO_READ)
+	var contentByte = make([]byte, MaxBytesToRead)
+
 	numByte, _ := file.Read(contentByte)
 	contentByte = contentByte[:numByte]
 
@@ -106,130 +525,16 @@ func regularFile(filename string) {
 		magic = peekLe(contentByte[60:], 4)
 	}
 
-	switch {
-	case lenb >= 45 && HasPrefix(contentByte, "\x7FELF"):
-		print("Elf file ")
-		doElf(contentByte)
-	case lenb >= 8 && HasPrefix(contentByte, "!<arch>\n"):
-		print("ar archive")
-	case lenb > 28 && HasPrefix(contentByte, "\x89PNG\x0d\x0a\x1a\x0a"):
-		print("PNG image data")
-	case lenb > 16 &&
-		(HasPrefix(contentByte, "GIF87a") || HasPrefix(contentByte, "GIF89a")):
-		print("GIF image data")
-	case lenb > 16 &&
-		(HasPrefix(contentByte, "\x00\x00\x00$ftypheic")) || (HasPrefix(contentByte, "\x00\x00\x00\x18ftypmif1")):
-		print("HEIC image data")
-	case lenb > 32 && HasPrefix(contentByte, "\xff\xd8"):
-		print("JPEG / jpg image data")
-	case lenb > 8 && HasPrefix(contentByte, "\xca\xfe\xba\xbe"):
-		print("Java class file")
-	case lenb > 8 && HasPrefix(contentByte, "dex\n"):
-		print("Android dex file")
-	case lenb > 500 && Equal(contentByte[257:262], "ustar"):
-		print("Posix tar archive")
-	case lenb > 5 && HasPrefix(contentByte, "PK\x03\x04"):
-		print(doZip(file))
-	case lenb > 4 && HasPrefix(contentByte, "BZh"):
-		print("bzip2 compressed data")
-	case lenb > 10 && HasPrefix(contentByte, "\x1f\x8b"):
-		print("gzip compressed data")
-	case lenb > 32 && Equal(contentByte[1:4], "\xfa\xed\xfe"):
-		print("Mach-O")
-	case lenb > 36 && HasPrefix(contentByte, "OggS\x00\x02"):
-		print("Ogg data")
-	case lenb > 32 && HasPrefix(contentByte, "RIF") &&
-		Equal(contentByte[8:16], "WAVEfmt "):
-		print("WAV audio")
-	case lenb > 12 && HasPrefix(contentByte, "\x00\x01\x00\x00"):
-		print("TrueType font")
-	case lenb > 12 && HasPrefix(contentByte, "ttcf\x00"):
-		print("TrueType font collection")
-	case lenb > 4 && HasPrefix(contentByte, "BC\xc0\xde"):
-		print("LLVM IR bitcode")
-	case HasPrefix(contentByte, "-----BEGIN CERTIFICATE-----"):
-		print("PEM certificate")
-	case magic != -1 && HasPrefix(contentByte, "MZ") && magic < lenb-4 &&
-		Equal(contentByte[magic:magic+4], "\x50\x45\x00\x00"):
-
-		print("MS executable")
-		if peekLe(contentByte[magic+22:], 2)&0x2000 != 0 {
-			print("(DLL)")
+	for _, matcher := range matchers {
+		if lenb >= matcher.minLen && matcher.match(contentByte, lenb, magic) {
+			fmt.Print(matcher.describe(contentByte, lenb, magic, file))
+			return
 		}
-		print(" ")
-		if peekLe(contentByte[magic+20:], 2) > 70 {
-			types := []string{"", "native", "GUI", "console", "OS/2", "driver", "CE",
-				"EFI", "EFI boot", "EFI runtime", "EFI ROM", "XBOX", "", "boot"}
-			tp := peekLe(contentByte[magic+92:], 2)
-			if tp > 0 && tp < len(types) {
-				print(types[tp])
-			}
-		}
-	case lenb > 50 && HasPrefix(contentByte, "BM") &&
-		Equal(contentByte[6:10], "\x00\x00\x00\x00"):
-		print("BMP image")
-	case lenb > 50 && HasPrefix(contentByte, "\x25\x50\x44\x46"):
-		print("PDF image")
-	case lenb > 16 &&
-		(HasPrefix(contentByte, "\x49\x49\x2a\x00") || HasPrefix(contentByte, "\x4D\x4D\x00\x2a")):
-		print("TIFF image data")
-	case lenb > 16 &&
-		(HasPrefix(contentByte, "ID3") || HasPrefix(contentByte, "\xff\xfb") || HasPrefix(contentByte, "\xff\xf3") || HasPrefix(contentByte, "\xff\xf2")):
-		print("MP3 audio file")
-	case lenb > 16 &&
-		(HasPrefix(contentByte, "\x00\x00\x00\x20\x66\x74\x79\x70") || HasPrefix(contentByte, "\x00\x00\x00\x18\x66\x74\x79\x70") || HasPrefix(contentByte, "\x00\x00\x00\x14\x66\x74\x79\x70")):
-		print("MP4 video file")
-	case lenb > 16 &&
-		(HasPrefix(contentByte, "\x52\x61\x72\x21\x1A\x07\x01\x00")) || (HasPrefix(contentByte, "\x52\x61\x72\x21\x1A\x07\x00")):
-		print("RAR archive data")
-	case lenb > 16 &&
-		(HasPrefix(contentByte, "\x37\x7A\xBC\xAF\x27\x1C")):
-		print("7zip archive data")
-	case lenb > 16 &&
-		(HasPrefix(contentByte, "\x00\x00\x01\x00")):
-		print("MS Windows icon resource")
-	case lenb > 16 &&
-		(HasPrefix(contentByte, "\x53\x51\x4C\x69\x74\x65\x20\x66\x6F\x72\x6D\x61\x74\x20\x33\x00")):
-		print("SQLite database")
-	case lenb > 16 &&
-		(HasPrefix(contentByte, "\x0A\x0D\x0D\x0A")):
-		print("PCAP-ng capture file")
-	case lenb > 16 &&
-		(HasPrefix(contentByte, "\xD4\xC3\xB2\xA1") || HasPrefix(contentByte, "\xA1\xB2\xC3\xD4") || HasPrefix(contentByte, "\x4D\x3C\xB2\xA1") || HasPrefix(contentByte, "\xA1\xB2\x3C\x4D")):
-		print("PCAP capture file")
-	case lenb > 16 &&
-		(HasPrefix(contentByte, "\x66\x4C\x61\x43")):
-		print("FLAC audio format")
-	case lenb > 16 &&
-		(HasPrefix(contentByte, "\x54\x44\x46\x24")):
-		print("Telegram Desktop file")
-	case lenb > 16 &&
-		(HasPrefix(contentByte, "\x54\x44\x45\x46")):
-		print("Telegram Desktop encrypted file")
-	case lenb > 16 &&
-		(HasPrefix(contentByte, "\x4D\x53\x43\x46")):
-		print("Microsoft Cabinet file")
-	case lenb > 16 &&
-		(HasPrefix(contentByte, "\x38\x42\x50\x53")):
-		print("Photoshop document")
-	case lenb > 32 && HasPrefix(contentByte, "RIF") &&
-		Equal(contentByte[8:11], "AVI"):
-		print("AVI file")
-	case lenb > 32 && HasPrefix(contentByte, "\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1"):
-		print("Microsoft Office (Legacy format)")
-	case lenb > 32 && HasPrefix(contentByte, "RIF") &&
-		Equal(contentByte[8:12], "WEBP"):
-		print("Google Webp file")
-	case lenb > 32 && HasPrefix(contentByte, "\x7B\x5C\x72\x74\x66\x31"):
-		print("Rich Text Format")
-	case lenb > 32 && (HasPrefix(contentByte, "<!DOCTYPE html") || (HasPrefix(contentByte, "<head>"))):
-		print("HTML document")
-	case lenb > 32 && (HasPrefix(contentByte, "<?xml version")):
-		print("XML document")
 	}
 }
 
-func doElf(contentByte []byte) {
+func doElf(contentByte []byte) string {
+	var output strings.Builder
 	bits := int(contentByte[4])
 	endian := contentByte[5]
 
@@ -245,33 +550,33 @@ func doElf(contentByte []byte) {
 
 	switch exei {
 	case 1:
-		print("relocatable")
+		output.WriteString("relocatable")
 	case 2:
-		print("executable")
+		output.WriteString("executable")
 	case 3:
-		print("shared object")
+		output.WriteString("shared object")
 	case 4:
-		print("core dump")
+		output.WriteString("core dump")
 	default:
-		print("bad type")
+		output.WriteString("bad type")
 	}
 
-	print(", ")
+	output.WriteString(", ")
 
 	switch bits {
 	case 1:
-		print("32-bit ")
+		output.WriteString("32-bit ")
 	case 2:
-		print("64-bit ")
+		output.WriteString("64-bit ")
 	}
 
 	switch endian {
 	case 1:
-		print("LSB ")
+		output.WriteString("LSB ")
 	case 2:
-		print("MSB ")
+		output.WriteString("MSB ")
 	default:
-		print("bad endian ")
+		output.WriteString("bad endian ")
 	}
 
 	/* You can have a full list from here https://golang.org/src/debug/elf/elf.go */
@@ -290,7 +595,7 @@ func doElf(contentByte []byte) {
 	archj := elfint(contentByte[18:], 2)
 	for key, val := range archType {
 		if val == archj {
-			print(key)
+			output.WriteString(key)
 			break
 		}
 	}
@@ -305,21 +610,23 @@ func doElf(contentByte []byte) {
 
 	for i := 0; i < phnum; i++ {
 		phdr := contentByte[phoff+i*phentsize:]
-		p_type := elfint(phdr, 4)
+		ptpye := elfint(phdr, 4)
 
-		dynamic = (p_type == 2) || dynamic /*PT_DYNAMIC*/
-		if p_type != 3 /*PT_INTERP*/ && p_type != 4 /*PT_NOTE*/ {
+		dynamic = (ptpye == 2) || dynamic /*PT_DYNAMIC*/
+		if ptpye != 3 /*PT_INTERP*/ && ptpye != 4 /*PT_NOTE*/ {
 			continue
 		}
 
-		if p_type == 3 /*PT_INTERP*/ {
-			print(", dynamically linked")
+		if ptpye == 3 /*PT_INTERP*/ {
+			output.WriteString(", dynamically linked")
 		}
 	}
 
 	if !dynamic {
-		print(", statically linked")
+		output.WriteString(", statically linked")
 	}
+
+	return output.String()
 }
 
 func HasPrefix(s []byte, prefix string) bool {
@@ -342,7 +649,7 @@ func peekLe(c []byte, size int) int {
 	ret := int64(0)
 
 	for i := 0; i < size; i++ {
-		ret = ret | int64(c[i])<<uint8(i*8)
+		ret |= int64(c[i]) << uint8(i*8)
 	}
 	return int(ret)
 }
@@ -380,15 +687,15 @@ func doZip(file *os.File) string {
 	str := string(buf[:])
 
 	// Some files have strings in the header indicating the type of Office program or document
-	if strings.Contains(str, "word/") && strings.Contains(str, "xml") {
+	switch {
+	case strings.Contains(str, "word/") && strings.Contains(str, "xml"):
 		return "Microsoft Word 2007+"
-	} else if strings.Contains(str, "ppt/theme") {
+	case strings.Contains(str, "ppt/theme"):
 		return "Microsoft PowerPoint 2007+"
-	} else if strings.Contains(str, "xl/") && strings.Contains(str, "xml") {
+	case strings.Contains(str, "xl/") && strings.Contains(str, "xml"):
 		return "Microsoft Excel 2007+"
+	default:
 		// Otherwise we will open zip and look for document, workbook, or presentation xml files
-	} else {
-
 		f, err := os.Open(file.Name())
 		if err != nil {
 			return "Error opening file"
@@ -402,13 +709,14 @@ func doZip(file *os.File) string {
 		}
 		// Loop through the files in the ZIP archive
 		for _, zipFile := range zipReader.File {
-			if zipFile.Name == "word/document.xml" {
+			switch zipFile.Name {
+			case "word/document.xml":
 				return "Microsoft Word 2007+"
-			} else if zipFile.Name == "xl/workbook.xml" {
+			case "xl/workbook.xml":
 				return "Microsoft Excel 2007+"
-			} else if zipFile.Name == "ppt/presentation.xml" {
+			case "ppt/presentation.xml":
 				return "Microsoft PowerPoint 2007+"
-			} else if zipFile.Name == "mimetype" {
+			case "mimetype":
 				file, err := zipFile.Open()
 				if err != nil {
 					return "Error opening file"
@@ -426,5 +734,52 @@ func doZip(file *os.File) string {
 			}
 		}
 	}
+
 	return "Zip archive data"
+}
+
+func describePE(contentByte []byte, magic int) string {
+	var output strings.Builder
+
+	// Linux kernel images look like PE files.
+	if Equal(contentByte[56:60], "ARMd") {
+		return "Linux arm64 kernel image"
+	}
+	if Equal(contentByte[514:518], "HdrS") {
+		return "Linux x86-64 kernel image"
+	}
+
+	output.WriteString("MS PE32")
+	if peekLe(contentByte[magic+24:], 2) == 0x20b {
+		output.WriteString("+")
+	}
+	output.WriteString(" executable")
+	if peekLe(contentByte[magic+22:], 2)&0x2000 != 0 {
+		output.WriteString("(DLL)")
+	}
+	output.WriteString(" ")
+	if peekLe(contentByte[magic+20:], 2) > 70 {
+		types := []string{"", "native", "GUI", "console", "OS/2", "driver", "CE",
+			"EFI", "EFI boot", "EFI runtime", "EFI ROM", "XBOX", "", "boot"}
+		tp := peekLe(contentByte[magic+92:], 2)
+		if tp > 0 && tp < len(types) {
+			output.WriteString(types[tp])
+		} else {
+			output.WriteString("unknown")
+		}
+	}
+
+	// Ref: https://learn.microsoft.com/en-us/windows/win32/debug/pe-format
+	switch peekLe(contentByte[magic+4:], 2) {
+	case 0x1c0:
+		output.WriteString(" arm")
+	case 0xaa64:
+		output.WriteString(" aarch64")
+	case 0x14c:
+		output.WriteString(" Intel 80386")
+	case 0x8664:
+		output.WriteString(" amd64")
+	}
+
+	return output.String()
 }
