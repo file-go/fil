@@ -6,6 +6,7 @@ Maintainer: Joeky <joeky5888@gmail.com>
 package main
 
 import (
+	"archive/tar"
 	"archive/zip"
 	"bytes"
 	"fmt"
@@ -105,7 +106,7 @@ var matchers = []fileMatcher{
 			return lenb > 500 && Equal(b[257:262], "ustar")
 		},
 		describe: func(b []byte, lenb int, magic int, file *os.File) string {
-			return "Posix tar archive"
+			return doTar(file)
 		},
 	},
 	{
@@ -890,6 +891,30 @@ func doZip(file *os.File) string {
 	}
 
 	return "Zip archive data"
+}
+
+func doTar(file *os.File) string {
+	// OVA is a tar containing at least one .ovf descriptor file.
+	if _, err := file.Seek(0, 0); err != nil {
+		return "Posix tar archive"
+	}
+
+	tr := tar.NewReader(file)
+	const maxEntries = 200
+	for i := 0; i < maxEntries; i++ {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return "Posix tar archive"
+		}
+		if strings.HasSuffix(strings.ToLower(hdr.Name), ".ovf") {
+			return "VMware OVA appliance"
+		}
+	}
+
+	return "Posix tar archive"
 }
 
 func describePE(contentByte []byte, magic int) string {
