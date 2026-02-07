@@ -9,6 +9,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -641,12 +642,20 @@ func usage() {
 func regularFile(filename string) {
 
 	/*---------------Read file------------------------*/
-	file, _ := os.OpenFile(filename, os.O_RDONLY, 0666)
+	file, err := os.OpenFile(filename, os.O_RDONLY, 0666)
+	if err != nil {
+		fmt.Print("File error.")
+		return
+	}
 	defer file.Close()
 
 	var contentByte = make([]byte, MaxBytesToRead)
 
-	numByte, _ := file.Read(contentByte)
+	numByte, err := file.Read(contentByte)
+	if err != nil && err != io.EOF {
+		fmt.Print("File error.")
+		return
+	}
 	contentByte = contentByte[:numByte]
 
 	lenb := len(contentByte)
@@ -812,14 +821,14 @@ func doZip(file *os.File) string {
 
 	// Read the first 60 bytes from the file
 	var buf [60]byte
-	_, err = file.Read(buf[:])
-	if err != nil {
+	n, err := file.Read(buf[:])
+	if err != nil && err != io.EOF {
 		fmt.Println(err)
 		return "File error."
 	}
 
 	// Convert the bytes to a string
-	str := string(buf[:])
+	str := string(buf[:n])
 
 	// Some files have strings in the header indicating the type of Office program or document
 	switch {
