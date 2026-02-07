@@ -7,6 +7,7 @@ package main
 
 import (
 	"archive/zip"
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,7 +16,7 @@ import (
 
 const (
 	MaxFileLength  = 256
-	MaxBytesToRead = 2 * 1024 // 2KB buffer to read file
+	MaxBytesToRead = 36 * 1024 // 36KB buffer to read file (ISO9660 magic starts at 0x8001)
 )
 
 type fileMatcher struct {
@@ -127,6 +128,46 @@ var matchers = []fileMatcher{
 		},
 	},
 	{
+		name:   "xz",
+		minLen: 6,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb >= 6 && HasPrefix(b, "\xFD7zXZ\x00")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "XZ compressed data"
+		},
+	},
+	{
+		name:   "zstd",
+		minLen: 4,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb >= 4 && HasPrefix(b, "\x28\xB5\x2F\xFD")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "Zstandard compressed data"
+		},
+	},
+	{
+		name:   "lz4",
+		minLen: 4,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb >= 4 && HasPrefix(b, "\x04\x22\x4D\x18")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "LZ4 compressed data"
+		},
+	},
+	{
+		name:   "lzip",
+		minLen: 4,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb >= 4 && HasPrefix(b, "LZIP")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "LZIP compressed data"
+		},
+	},
+	{
 		name:   "gzip",
 		minLen: 11,
 		match: func(b []byte, lenb int, magic int) bool {
@@ -137,6 +178,16 @@ var matchers = []fileMatcher{
 		},
 	},
 	{
+		name:   "wasm",
+		minLen: 4,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb >= 4 && HasPrefix(b, "\x00asm")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "WebAssembly binary"
+		},
+	},
+	{
 		name:   "macho",
 		minLen: 33,
 		match: func(b []byte, lenb int, magic int) bool {
@@ -144,6 +195,36 @@ var matchers = []fileMatcher{
 		},
 		describe: func(b []byte, lenb int, magic int, file *os.File) string {
 			return "Mach-O"
+		},
+	},
+	{
+		name:   "flv",
+		minLen: 3,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb >= 3 && HasPrefix(b, "FLV")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "FLV video file"
+		},
+	},
+	{
+		name:   "matroska",
+		minLen: 4,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb >= 4 && HasPrefix(b, "\x1A\x45\xDF\xA3") && bytes.Contains(b, []byte("matroska"))
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "Matroska video file"
+		},
+	},
+	{
+		name:   "webm",
+		minLen: 4,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb >= 4 && HasPrefix(b, "\x1A\x45\xDF\xA3") && bytes.Contains(b, []byte("webm"))
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "WebM video file"
 		},
 	},
 	{
@@ -164,6 +245,26 @@ var matchers = []fileMatcher{
 		},
 		describe: func(b []byte, lenb int, magic int, file *os.File) string {
 			return "WAV audio"
+		},
+	},
+	{
+		name:   "woff",
+		minLen: 4,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb >= 4 && HasPrefix(b, "wOFF")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "WOFF font"
+		},
+	},
+	{
+		name:   "woff2",
+		minLen: 4,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb >= 4 && HasPrefix(b, "wOF2")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "WOFF2 font"
 		},
 	},
 	{
@@ -197,6 +298,26 @@ var matchers = []fileMatcher{
 		},
 	},
 	{
+		name:   "parquet",
+		minLen: 4,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb >= 4 && HasPrefix(b, "PAR1")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "Parquet data"
+		},
+	},
+	{
+		name:   "avro",
+		minLen: 4,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb >= 4 && HasPrefix(b, "Obj\x01")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "Avro data"
+		},
+	},
+	{
 		name:   "pem",
 		minLen: len("-----BEGIN CERTIFICATE-----"),
 		match: func(b []byte, lenb int, magic int) bool {
@@ -215,6 +336,16 @@ var matchers = []fileMatcher{
 		},
 		describe: func(b []byte, lenb int, magic int, file *os.File) string {
 			return describePE(b, magic)
+		},
+	},
+	{
+		name:   "iso9660",
+		minLen: 0x8006,
+		match: func(b []byte, lenb int, magic int) bool {
+			return lenb >= 0x8006 && Equal(b[0x8001:0x8006], "CD001")
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return "ISO 9660 CD-ROM filesystem"
 		},
 	},
 	{
