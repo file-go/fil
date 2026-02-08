@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/binary"
 	"os"
 )
 
@@ -192,6 +193,67 @@ var matcherPdb = fileMatcher{
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
 		return "Microsoft Program Database"
 	},
+}
+
+var matcherMinidump = fileMatcher{
+	name:   "minidump",
+	minLen: 4,
+	match: func(b []byte, lenb int, magic int) bool {
+		return lenb >= 4 && HasPrefix(b, "MDMP")
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "Windows minidump"
+	},
+}
+
+var matcherThumbcache = fileMatcher{
+	name:   "thumbcache",
+	minLen: 4,
+	match: func(b []byte, lenb int, magic int) bool {
+		return lenb >= 4 && HasPrefix(b, "CMMM")
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "Windows thumbnail cache"
+	},
+}
+
+var matcherRecycleBinI = fileMatcher{
+	name:   "recyclebin-i",
+	minLen: 24,
+	match: func(b []byte, lenb int, magic int) bool {
+		if lenb < 24 {
+			return false
+		}
+		ver := binary.LittleEndian.Uint64(b[:8])
+		if ver != 1 && ver != 2 {
+			return false
+		}
+
+		// Deletion timestamp as FILETIME.
+		t := binary.LittleEndian.Uint64(b[16:24])
+		const minFiletime = uint64(116444736000000000) // 1970-01-01 UTC
+		const maxReasonableFiletime = uint64(600000000000000000)
+		if t < minFiletime || t > maxReasonableFiletime {
+			return false
+		}
+
+		return hasRecycleBinPathHint(b)
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "Windows Recycle Bin metadata"
+	},
+}
+
+func hasRecycleBinPathHint(b []byte) bool {
+	if len(b) <= 24 {
+		return false
+	}
+	end := len(b)
+	if end > 256 {
+		end = 256
+	}
+	s := b[24:end]
+	return bytes.Contains(s, []byte{0x3a, 0x00, 0x5c, 0x00}) || bytes.Contains(s, []byte{0x5c, 0x00, 0x5c, 0x00})
 }
 
 var matcherTdf = fileMatcher{
