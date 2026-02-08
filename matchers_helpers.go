@@ -37,6 +37,14 @@ func hasParquetFooter() bool {
 	return bytes.Equal(buf, []byte("PAR1"))
 }
 
+func hasArrowFooter() bool {
+	buf, ok := readTail(6)
+	if !ok {
+		return false
+	}
+	return bytes.Equal(buf, []byte("ARROW1"))
+}
+
 func hasFtypBrand(b []byte, brands ...string) bool {
 	if len(b) < 12 {
 		return false

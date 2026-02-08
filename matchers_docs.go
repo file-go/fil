@@ -1,6 +1,10 @@
 package main
 
-import "os"
+import (
+	"bytes"
+	"encoding/json"
+	"os"
+)
 
 var matcherBmp = fileMatcher{
 	name:   "bmp",
@@ -88,5 +92,52 @@ var matcherXml = fileMatcher{
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
 		return "XML document"
+	},
+}
+
+var matcherSvg = fileMatcher{
+	name:   "svg",
+	minLen: 5,
+	match: func(b []byte, lenb int, magic int) bool {
+		if lenb < 5 || !isText(b) {
+			return false
+		}
+		end := lenb
+		if end > 4096 {
+			end = 4096
+		}
+		h := bytes.ToLower(b[:end])
+		trimmed := bytes.TrimSpace(h)
+		if len(trimmed) == 0 {
+			return false
+		}
+		if !bytes.HasPrefix(trimmed, []byte("<?xml")) && !bytes.HasPrefix(trimmed, []byte("<svg")) {
+			return false
+		}
+		return bytes.Contains(h, []byte("<svg"))
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "SVG Scalable Vector Graphics image"
+	},
+}
+
+var matcherJSON = fileMatcher{
+	name:   "json",
+	minLen: 2,
+	match: func(b []byte, lenb int, magic int) bool {
+		if lenb < 2 || !isText(b) {
+			return false
+		}
+		trimmed := bytes.TrimSpace(b)
+		if len(trimmed) == 0 {
+			return false
+		}
+		if trimmed[0] != '{' && trimmed[0] != '[' {
+			return false
+		}
+		return json.Valid(trimmed)
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "JSON data"
 	},
 }

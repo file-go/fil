@@ -27,6 +27,50 @@ var matcherAvro = fileMatcher{
 	},
 }
 
+var matcherHdf5 = fileMatcher{
+	name:   "hdf5",
+	minLen: 8,
+	match: func(b []byte, lenb int, magic int) bool {
+		return lenb >= 8 && HasPrefix(b, "\x89HDF\x0d\x0a\x1a\x0a")
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "Hierarchical Data Format (version 5) data"
+	},
+}
+
+var matcherNetcdf = fileMatcher{
+	name:   "netcdf",
+	minLen: 4,
+	match: func(b []byte, lenb int, magic int) bool {
+		return lenb >= 4 && (HasPrefix(b, "CDF\x01") || HasPrefix(b, "CDF\x02"))
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "NetCDF Data Format data"
+	},
+}
+
+var matcherFeather = fileMatcher{
+	name:   "feather",
+	minLen: 6,
+	match: func(b []byte, lenb int, magic int) bool {
+		return lenb >= 6 && HasPrefix(b, "ARROW1") && hasArrowFooter()
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "Apache Arrow Feather"
+	},
+}
+
+var matcherPgCustomDump = fileMatcher{
+	name:   "pg-custom-dump",
+	minLen: 5,
+	match: func(b []byte, lenb int, magic int) bool {
+		return lenb >= 5 && HasPrefix(b, "PGDMP")
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "PostgreSQL custom database dump"
+	},
+}
+
 var matcherSqlite = fileMatcher{
 	name:   "sqlite",
 	minLen: 17,
@@ -101,6 +145,17 @@ var matcherLnk = fileMatcher{
 	},
 }
 
+var matcherRegistryHive = fileMatcher{
+	name:   "registry-hive",
+	minLen: 4,
+	match: func(b []byte, lenb int, magic int) bool {
+		return lenb >= 4 && HasPrefix(b, "regf")
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "Windows Registry hive"
+	},
+}
+
 var matcherEvtx = fileMatcher{
 	name:   "evtx",
 	minLen: 8,
@@ -109,6 +164,18 @@ var matcherEvtx = fileMatcher{
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
 		return "Windows Event Log"
+	},
+}
+
+var matcherPdb = fileMatcher{
+	name:   "pdb",
+	minLen: len("Microsoft C/C++ MSF 7.00"),
+	match: func(b []byte, lenb int, magic int) bool {
+		return lenb >= len("Microsoft C/C++ MSF 7.00") &&
+			HasPrefix(b, "Microsoft C/C++ MSF 7.00")
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "Microsoft Program Database"
 	},
 }
 

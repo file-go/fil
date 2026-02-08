@@ -57,6 +57,40 @@ var matcherVmdk = fileMatcher{
 	},
 }
 
+var matcherQcow = fileMatcher{
+	name:   "qcow",
+	minLen: 4,
+	match: func(b []byte, lenb int, magic int) bool {
+		return lenb >= 4 && HasPrefix(b, "QFI\xfb")
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "QEMU QCOW disk image"
+	},
+}
+
+var matcherVhdx = fileMatcher{
+	name:   "vhdx",
+	minLen: 8,
+	match: func(b []byte, lenb int, magic int) bool {
+		return lenb >= 8 && HasPrefix(b, "vhdxfile")
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "Microsoft VHDX disk image"
+	},
+}
+
+var matcherVdi = fileMatcher{
+	name:   "vdi",
+	minLen: len("<<< Oracle VM VirtualBox Disk Image >>>"),
+	match: func(b []byte, lenb int, magic int) bool {
+		return lenb >= len("<<< Oracle VM VirtualBox Disk Image >>>") &&
+			HasPrefix(b, "<<< Oracle VM VirtualBox Disk Image >>>")
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "VirtualBox VDI disk image"
+	},
+}
+
 var matcherBzip2 = fileMatcher{
 	name:   "bzip2",
 	minLen: 5,
