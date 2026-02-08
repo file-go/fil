@@ -459,7 +459,7 @@ func detectTextSubtype(b []byte) string {
 		return "Generic INItialization configuration"
 	}
 
-	if strings.HasPrefix(top, "#!/bin/sh") || strings.HasPrefix(top, "#!/bin/bash") {
+	if strings.HasPrefix(top, "#!/bin/sh") || strings.HasPrefix(top, "#!/bin/bash") || strings.HasPrefix(top, "#!/usr/bin/env sh") {
 		return "shell script"
 	}
 
@@ -491,8 +491,16 @@ func detectTextSubtype(b []byte) string {
 		return "Windows batch script"
 	}
 
+	if looksLikeTypeScript(topLower) {
+		return "TypeScript"
+	}
+
 	if looksLikeJavaScript(topLower) {
 		return "JavaScript"
+	}
+
+	if looksLikeYAML(top) {
+		return "YAML"
 	}
 
 	return ""
@@ -525,7 +533,7 @@ func looksLikeOpenVPN(s string) bool {
 }
 
 func looksLikeJavaScript(s string) bool {
-	if looksLikePython(s) || looksLikePowerShell(s) || looksLikePerl(s) || looksLikeBatch(s) {
+	if looksLikePython(s) || looksLikePowerShell(s) || looksLikePerl(s) || looksLikeBatch(s) || looksLikeTypeScript(s) {
 		return false
 	}
 
@@ -546,6 +554,33 @@ func looksLikeJavaScript(s string) bool {
 		hits++
 	}
 	if strings.Contains(s, "export ") || strings.Contains(s, "\nexport ") {
+		hits++
+	}
+	return hits >= 2
+}
+
+func looksLikeTypeScript(s string) bool {
+	if looksLikePython(s) || looksLikePowerShell(s) || looksLikePerl(s) || looksLikeBatch(s) {
+		return false
+	}
+
+	hits := 0
+	if strings.Contains(s, "\ninterface ") {
+		hits++
+	}
+	if strings.Contains(s, "\ntype ") {
+		hits++
+	}
+	if strings.Contains(s, "\nenum ") {
+		hits++
+	}
+	if strings.Contains(s, "implements ") {
+		hits++
+	}
+	if strings.Contains(s, ": string") || strings.Contains(s, ": number") || strings.Contains(s, ": boolean") {
+		hits++
+	}
+	if strings.Contains(s, " as const") || strings.Contains(s, " as ") {
 		hits++
 	}
 	return hits >= 2
@@ -668,6 +703,45 @@ func looksLikeINI(s string) (bool, bool) {
 	}
 
 	return sections > 0 && keyvals > 0, hasExtensions
+}
+
+func looksLikeYAML(s string) bool {
+	lines := strings.Split(s, "\n")
+	keyValLines := 0
+	startMarker := false
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if line == "---" {
+			startMarker = true
+			continue
+		}
+		if strings.HasPrefix(line, "- ") {
+			continue
+		}
+
+		colon := strings.Index(line, ":")
+		if colon <= 0 {
+			continue
+		}
+		// Ignore URLs and obvious non-YAML tokens that tend to be false positives.
+		if strings.Contains(line, "://") || strings.Contains(line, "{") || strings.Contains(line, "}") || strings.Contains(line, ";") {
+			continue
+		}
+		key := strings.TrimSpace(line[:colon])
+		if key == "" {
+			continue
+		}
+		keyValLines++
+	}
+
+	if startMarker && keyValLines >= 1 {
+		return true
+	}
+	return keyValLines >= 2
 }
 
 func doElf(contentByte []byte) string {
