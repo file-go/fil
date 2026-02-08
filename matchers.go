@@ -58,6 +58,7 @@ var matchers = []fileMatcher{
 	matcherLnk,
 	matcherEvtx,
 	matcherRegistryHive,
+	matcherPrefetch,
 	matcherPdb,
 	matcherPcapng,
 	matcherPcap,

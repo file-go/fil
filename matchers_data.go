@@ -156,6 +156,21 @@ var matcherRegistryHive = fileMatcher{
 	},
 }
 
+var matcherPrefetch = fileMatcher{
+	name:   "prefetch",
+	minLen: 8,
+	match: func(b []byte, lenb int, magic int) bool {
+		if lenb < 8 || !Equal(b[4:8], "SCCA") {
+			return false
+		}
+		version := peekLe(b[:4], 4)
+		return version == 0x11 || version == 0x17 || version == 0x1a || version == 0x1e
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "Windows Prefetch file"
+	},
+}
+
 var matcherEvtx = fileMatcher{
 	name:   "evtx",
 	minLen: 8,
