@@ -36,6 +36,17 @@ var matcherTiff = fileMatcher{
 	},
 }
 
+var matcherMsi = fileMatcher{
+	name:   "msi",
+	minLen: 32,
+	match: func(b []byte, lenb int, magic int) bool {
+		return looksLikeMsi(b)
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "Microsoft Installer (MSI)"
+	},
+}
+
 var matcherOle = fileMatcher{
 	name:   "ole",
 	minLen: 33,

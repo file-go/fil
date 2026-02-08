@@ -1,12 +1,15 @@
 package main
 
-import "os"
+import (
+	"bytes"
+	"os"
+)
 
 var matcherParquet = fileMatcher{
 	name:   "parquet",
 	minLen: 4,
 	match: func(b []byte, lenb int, magic int) bool {
-		return lenb >= 4 && HasPrefix(b, "PAR1")
+		return lenb >= 4 && HasPrefix(b, "PAR1") && hasParquetFooter()
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
 		return "Parquet data"
@@ -32,6 +35,35 @@ var matcherSqlite = fileMatcher{
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
 		return "SQLite database"
+	},
+}
+
+var matcherSqliteWal = fileMatcher{
+	name:   "sqlite-wal",
+	minLen: 4,
+	match: func(b []byte, lenb int, magic int) bool {
+		return lenb >= 4 && (Equal(b[:4], "\x37\x7F\x06\x82") || Equal(b[:4], "\x37\x7F\x06\x83"))
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "SQLite WAL file"
+	},
+}
+
+var matcherSqliteJournal = fileMatcher{
+	name:   "sqlite-journal",
+	minLen: 16,
+	match: func(b []byte, lenb int, magic int) bool {
+		if lenb <= 15 || !HasPrefix(b, "\x53\x51\x4C\x69\x74\x65\x20\x66\x6F\x72\x6D\x61\x74\x20\x33\x00") {
+			return false
+		}
+		end := lenb
+		if end > 4096 {
+			end = 4096
+		}
+		return bytes.Contains(b[:end], []byte("journal"))
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "SQLite journal file"
 	},
 }
 

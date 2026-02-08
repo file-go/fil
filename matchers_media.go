@@ -78,7 +78,7 @@ var matcherOgg = fileMatcher{
 		return lenb > 36 && HasPrefix(b, "OggS\x00\x02")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
-		return "Ogg data"
+		return oggSubtype(b)
 	},
 }
 
@@ -102,6 +102,28 @@ var matcherMp3 = fileMatcher{
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
 		return "MP3 audio file"
+	},
+}
+
+var matcherHeif = fileMatcher{
+	name:   "heif",
+	minLen: 12,
+	match: func(b []byte, lenb int, magic int) bool {
+		return isHeifFamily(b)
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "HEIF image"
+	},
+}
+
+var matcherM4a = fileMatcher{
+	name:   "m4a",
+	minLen: 12,
+	match: func(b []byte, lenb int, magic int) bool {
+		return isM4aLike(b)
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "M4A audio"
 	},
 }
 

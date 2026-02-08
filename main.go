@@ -30,6 +30,8 @@ type fileMatcher struct {
 	describe func([]byte, int, int, *os.File) string
 }
 
+var activeFile *os.File
+
 func main() {
 	brief := flag.Bool("b", false, "brief output (type only)")
 	followSymlinks := flag.Bool("L", false, "follow symlinks")
@@ -278,6 +280,10 @@ func detectFileType(filename string) (string, error) {
 }
 
 func detectFromBytes(contentByte []byte, filename string, file *os.File) (string, error) {
+	activeFile = file
+	defer func() {
+		activeFile = nil
+	}()
 	lenb := len(contentByte)
 	/*---------------Read file end------------------------*/
 	magic := -1
@@ -390,10 +396,23 @@ func mimeForDescription(desc string) string {
 		return "application/vnd.openxmlformats-officedocument.presentationml.presentation"
 	case strings.Contains(descLower, "epub document"):
 		return "application/epub+zip"
+	case descLower == "opendocument":
+		return "application/vnd.oasis.opendocument"
 	case strings.Contains(descLower, "email message (eml)"):
 		return "message/rfc822"
 	case strings.Contains(descLower, "openvpn configuration"):
 		return "application/x-openvpn-profile"
+	case strings.Contains(descLower, "apple udif disk image"):
+		return "application/x-apple-diskimage"
+	case strings.Contains(descLower, "heif image"):
+		return "image/heif"
+	case strings.Contains(descLower, "m4a audio"):
+		return "audio/mp4"
+	case strings.Contains(descLower, "ogg opus audio"),
+		strings.Contains(descLower, "ogg vorbis audio"),
+		strings.Contains(descLower, "ogg flac audio"),
+		descLower == "ogg data":
+		return "audio/ogg"
 	case strings.Contains(descLower, "vmware ova appliance"):
 		return "application/x-virtualbox-ova"
 	case strings.Contains(descLower, "vmware virtual disk"):
@@ -404,6 +423,11 @@ func mimeForDescription(desc string) string {
 		return "text/plain"
 	case strings.Contains(descLower, "vmware supplemental configuration"):
 		return "text/plain"
+	case strings.Contains(descLower, "microsoft installer (msi)"):
+		return "application/x-msi"
+	case strings.Contains(descLower, "sqlite wal file"),
+		strings.Contains(descLower, "sqlite journal file"):
+		return "application/x-sqlite3"
 	}
 
 	return "application/octet-stream"
@@ -734,13 +758,17 @@ func doZip(file *os.File) string {
 					return "Error opening file"
 				}
 				defer file.Close()
-				// Check for ePub format
-				first20Bytes := make([]byte, 20)
-				_, err = file.Read(first20Bytes)
+				// Check for OpenDocument or ePub format
+				first200Bytes := make([]byte, 200)
+				_, err = file.Read(first200Bytes)
 				if err != nil {
-					return "Error reading first 20 bytes"
+					return "Error reading first 200 bytes"
 				}
-				if strings.Contains(string(first20Bytes), "epub") {
+				mimeSample := string(first200Bytes)
+				if strings.Contains(mimeSample, "application/vnd.oasis.opendocument.") {
+					return "OpenDocument"
+				}
+				if strings.Contains(mimeSample, "epub") {
 					return "EPUB document"
 				}
 			}

@@ -35,6 +35,17 @@ var matcherZip = fileMatcher{
 	},
 }
 
+var matcherDmg = fileMatcher{
+	name:   "dmg",
+	minLen: 1,
+	match: func(b []byte, lenb int, magic int) bool {
+		return hasDmgTrailer()
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "Apple UDIF disk image"
+	},
+}
+
 var matcherVmdk = fileMatcher{
 	name:   "vmdk",
 	minLen: 4,
