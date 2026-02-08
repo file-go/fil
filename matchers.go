@@ -48,6 +48,8 @@ var matchers = []fileMatcher{
 	matcherSqliteWal,
 	matcherSqliteJournal,
 	matcherSqlite,
+	matcherLnk,
+	matcherEvtx,
 	matcherPcapng,
 	matcherPcap,
 	matcherFlac,

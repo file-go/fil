@@ -90,6 +90,28 @@ var matcherPcap = fileMatcher{
 	},
 }
 
+var matcherLnk = fileMatcher{
+	name:   "lnk",
+	minLen: 20,
+	match: func(b []byte, lenb int, magic int) bool {
+		return lenb >= 20 && HasPrefix(b, "\x4C\x00\x00\x00\x01\x14\x02\x00\x00\x00\x00\x00\xC0\x00\x00\x00\x00\x00\x00\x46")
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "Windows shortcut"
+	},
+}
+
+var matcherEvtx = fileMatcher{
+	name:   "evtx",
+	minLen: 8,
+	match: func(b []byte, lenb int, magic int) bool {
+		return lenb >= 8 && HasPrefix(b, "ElfFile\x00")
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "Windows Event Log"
+	},
+}
+
 var matcherTdf = fileMatcher{
 	name:   "tdf",
 	minLen: 17,
