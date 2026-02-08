@@ -75,13 +75,12 @@ func main() {
 		}
 	}
 
-	visitedDirs := make(map[string]struct{})
 	for _, filename := range files {
 		if filename == "-" && *filesFrom != "" {
 			handleStdin(*brief, *mimeOutput, *jsonOutput)
 			continue
 		}
-		processPath(filename, longestFileName, *brief, *mimeOutput, *followSymlinks, *jsonOutput, visitedDirs)
+		processPath(filename, longestFileName, *brief, *mimeOutput, *followSymlinks, *jsonOutput)
 	}
 }
 
@@ -96,7 +95,7 @@ func usage() {
 	os.Exit(0)
 }
 
-func processPath(filename string, longestFileName int, brief bool, mimeOutput bool, followSymlinks bool, jsonOutput bool, visitedDirs map[string]struct{}) {
+func processPath(filename string, longestFileName int, brief bool, mimeOutput bool, followSymlinks bool, jsonOutput bool) {
 	fi, err := os.Lstat(filename)
 	if err != nil {
 		emitError(filename, err, jsonOutput)
@@ -109,56 +108,7 @@ func processPath(filename string, longestFileName int, brief bool, mimeOutput bo
 	}
 
 	if fi.Mode().IsDir() {
-		realPath := filename
-		if followSymlinks {
-			if resolved, err := filepath.EvalSymlinks(filename); err == nil {
-				realPath = resolved
-			}
-		}
-		if _, seen := visitedDirs[realPath]; seen {
-			return
-		}
-		visitedDirs[realPath] = struct{}{}
-		filepath.WalkDir(realPath, func(path string, d os.DirEntry, err error) error {
-			if err != nil {
-				emitError(path, err, jsonOutput)
-				return nil
-			}
-			if d.IsDir() {
-				return nil
-			}
-			if d.Type()&os.ModeSymlink != 0 && followSymlinks {
-				target, err := filepath.EvalSymlinks(path)
-				if err != nil {
-					emitError(path, err, jsonOutput)
-					return nil
-				}
-				tinfo, err := os.Stat(target)
-				if err != nil {
-					emitError(path, err, jsonOutput)
-					return nil
-				}
-				if tinfo.IsDir() {
-					return nil
-				}
-				desc, derr := detectFileType(target)
-				if derr != nil {
-					emitError(path, derr, jsonOutput)
-					return nil
-				}
-				printResult(path, longestFileName, brief, mimeOutput, jsonOutput, desc)
-				return nil
-			}
-			if d.Type().IsRegular() {
-				desc, derr := detectFileType(path)
-				if derr != nil {
-					emitError(path, derr, jsonOutput)
-					return nil
-				}
-				printResult(path, longestFileName, brief, mimeOutput, jsonOutput, desc)
-			}
-			return nil
-		})
+		printResult(filename, longestFileName, brief, mimeOutput, jsonOutput, "directory")
 		return
 	}
 
@@ -174,7 +124,7 @@ func processPath(filename string, longestFileName int, brief bool, mimeOutput bo
 			return
 		}
 		if tinfo.IsDir() {
-			processPath(target, longestFileName, brief, mimeOutput, followSymlinks, jsonOutput, visitedDirs)
+			printResult(filename, longestFileName, brief, mimeOutput, jsonOutput, "directory")
 			return
 		}
 		desc, derr := detectFileType(target)
