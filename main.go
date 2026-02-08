@@ -8,12 +8,14 @@ package main
 import (
 	"archive/tar"
 	"archive/zip"
+	"encoding/csv"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 )
@@ -459,6 +461,10 @@ func detectTextSubtype(b []byte) string {
 		return "Generic INItialization configuration"
 	}
 
+	if delimited := detectDelimitedSubtype(top); delimited != "" {
+		return delimited
+	}
+
 	if strings.HasPrefix(top, "#!/bin/sh") || strings.HasPrefix(top, "#!/bin/bash") || strings.HasPrefix(top, "#!/usr/bin/env sh") {
 		return "shell script"
 	}
@@ -742,6 +748,159 @@ func looksLikeYAML(s string) bool {
 		return true
 	}
 	return keyValLines >= 2
+}
+
+func detectDelimitedSubtype(s string) string {
+	csvScore := scoreDelimited(s, ',')
+	tsvScore := scoreDelimited(s, '\t')
+	const minScore = 1.2
+
+	if csvScore < minScore && tsvScore < minScore {
+		return ""
+	}
+	if tsvScore > csvScore+0.15 {
+		return "TSV text"
+	}
+	if csvScore > tsvScore+0.15 {
+		return "CSV text"
+	}
+	if tsvScore > csvScore {
+		return "TSV text"
+	}
+	return "CSV text"
+}
+
+func scoreDelimited(s string, delim rune) float64 {
+	lines := strings.Split(s, "\n")
+	validRows := make([][]string, 0, 64)
+	fieldCountHits := make(map[int]int)
+	delimiterLines := 0
+	maxLines := 60
+
+	for _, line := range lines {
+		if len(validRows) >= maxLines {
+			break
+		}
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "//") {
+			continue
+		}
+		if !strings.ContainsRune(line, delim) {
+			continue
+		}
+		delimiterLines++
+
+		r := csv.NewReader(strings.NewReader(line))
+		r.Comma = delim
+		r.FieldsPerRecord = -1
+		r.LazyQuotes = true
+		r.TrimLeadingSpace = true
+		fields, err := r.Read()
+		if err != nil || len(fields) < 2 {
+			continue
+		}
+
+		validRows = append(validRows, fields)
+		fieldCountHits[len(fields)]++
+	}
+
+	valid := len(validRows)
+	if valid < 4 || delimiterLines < 4 {
+		return 0
+	}
+
+	modeFields := 0
+	modeCount := 0
+	for fieldCount, count := range fieldCountHits {
+		if count > modeCount {
+			modeCount = count
+			modeFields = fieldCount
+		}
+	}
+
+	if modeFields < 2 {
+		return 0
+	}
+
+	consistency := float64(modeCount) / float64(valid)
+	if consistency < 0.85 {
+		return 0
+	}
+
+	// Header-like boost: first structured row text-heavy + subsequent row numeric-heavy.
+	var header []string
+	var second []string
+	for _, row := range validRows {
+		if len(row) != modeFields {
+			continue
+		}
+		if header == nil {
+			header = row
+			continue
+		}
+		second = row
+		break
+	}
+
+	score := consistency*2.0 + float64(valid)/20.0
+	if header != nil && second != nil && isMostlyTextRow(header) && isMostlyNumericRow(second) {
+		score += 0.35
+	}
+	return score
+}
+
+func isMostlyTextRow(fields []string) bool {
+	texty := 0
+	nonEmpty := 0
+	for _, field := range fields {
+		f := strings.TrimSpace(field)
+		if f == "" {
+			continue
+		}
+		nonEmpty++
+		if hasLetter(f) && !isNumericField(f) {
+			texty++
+		}
+	}
+	return nonEmpty > 0 && texty*2 >= nonEmpty
+}
+
+func isMostlyNumericRow(fields []string) bool {
+	numeric := 0
+	nonEmpty := 0
+	for _, field := range fields {
+		f := strings.TrimSpace(field)
+		if f == "" {
+			continue
+		}
+		nonEmpty++
+		if isNumericField(f) {
+			numeric++
+		}
+	}
+	return nonEmpty > 0 && numeric*2 >= nonEmpty
+}
+
+func isNumericField(s string) bool {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return false
+	}
+	s = strings.TrimPrefix(s, "$")
+	if strings.HasSuffix(s, "%") {
+		s = strings.TrimSuffix(s, "%")
+	}
+	_, err := strconv.ParseFloat(s, 64)
+	return err == nil
+}
+
+func hasLetter(s string) bool {
+	for _, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') {
+			return true
+		}
+	}
+	return false
 }
 
 func doElf(contentByte []byte) string {
