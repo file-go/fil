@@ -589,6 +589,8 @@ var matchers = []fileMatcher{
 
 func main() {
 	brief := flag.Bool("b", false, "brief output (type only)")
+	followSymlinks := flag.Bool("L", false, "follow symlinks")
+	mimeOutput := flag.Bool("i", false, "MIME type output")
 	flag.Usage = usage
 	flag.Parse()
 
@@ -611,60 +613,135 @@ func main() {
 		}
 	}
 
+	visitedDirs := make(map[string]struct{})
 	for _, filename := range files {
-		fi, err := os.Lstat(filename)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, filename+": "+err.Error())
-			continue
-		}
-
-		if len(filename) > MaxFileLength {
-			fmt.Fprintln(os.Stderr, "File name too long.")
-			continue
-		}
-
-		if !*brief {
-			fmt.Print(filename + ": ")
-			// Add padding to make columns
-			for padding := 0; padding < longestFileName+2-len(filename); padding++ {
-				fmt.Print(" ")
-			}
-		}
-
-		switch {
-		case fi.Mode()&os.ModeSymlink != 0:
-			reallink, _ := os.Readlink(filename)
-			fmt.Print("symbolic link to " + reallink)
-		case fi.Mode()&os.ModeDir != 0:
-			fmt.Print("directory")
-		case fi.Mode()&os.ModeSocket != 0:
-			fmt.Print("socket")
-		case fi.Mode()&os.ModeCharDevice != 0:
-			fmt.Print("character special device")
-		case fi.Mode()&os.ModeDevice != 0:
-			fmt.Print("device file")
-		case fi.Mode()&os.ModeNamedPipe != 0:
-			fmt.Print("fifo")
-		default:
-			regularFile(filename)
-		}
-		fmt.Println()
+		processPath(filename, longestFileName, *brief, *mimeOutput, *followSymlinks, visitedDirs)
 	}
 }
 
 func usage() {
-	fmt.Println("Usage: fil [-b] FILE_NAME")
+	fmt.Println("Usage: fil [-b] [-i] [-L] FILE_NAME")
 	fmt.Println("  -b    brief output (type only)")
+	fmt.Println("  -i    MIME type output")
+	fmt.Println("  -L    follow symlinks")
 	os.Exit(0)
 }
 
-func regularFile(filename string) {
+func processPath(filename string, longestFileName int, brief bool, mimeOutput bool, followSymlinks bool, visitedDirs map[string]struct{}) {
+	fi, err := os.Lstat(filename)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, filename+": "+err.Error())
+		return
+	}
+
+	if len(filename) > MaxFileLength {
+		fmt.Fprintln(os.Stderr, "File name too long.")
+		return
+	}
+
+	if fi.Mode().IsDir() {
+		realPath := filename
+		if followSymlinks {
+			if resolved, err := filepath.EvalSymlinks(filename); err == nil {
+				realPath = resolved
+			}
+		}
+		if _, seen := visitedDirs[realPath]; seen {
+			return
+		}
+		visitedDirs[realPath] = struct{}{}
+		filepath.WalkDir(realPath, func(path string, d os.DirEntry, err error) error {
+			if err != nil {
+				fmt.Fprintln(os.Stderr, path+": "+err.Error())
+				return nil
+			}
+			if d.IsDir() {
+				return nil
+			}
+			if d.Type()&os.ModeSymlink != 0 && followSymlinks {
+				target, err := filepath.EvalSymlinks(path)
+				if err != nil {
+					fmt.Fprintln(os.Stderr, path+": "+err.Error())
+					return nil
+				}
+				tinfo, err := os.Stat(target)
+				if err != nil {
+					fmt.Fprintln(os.Stderr, path+": "+err.Error())
+					return nil
+				}
+				if tinfo.IsDir() {
+					return nil
+				}
+				printResult(path, longestFileName, brief, mimeOutput, detectFileType(target))
+				return nil
+			}
+			if d.Type().IsRegular() {
+				printResult(path, longestFileName, brief, mimeOutput, detectFileType(path))
+			}
+			return nil
+		})
+		return
+	}
+
+	if fi.Mode()&os.ModeSymlink != 0 && followSymlinks {
+		target, err := filepath.EvalSymlinks(filename)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, filename+": "+err.Error())
+			return
+		}
+		tinfo, err := os.Stat(target)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, filename+": "+err.Error())
+			return
+		}
+		if tinfo.IsDir() {
+			processPath(target, longestFileName, brief, mimeOutput, followSymlinks, visitedDirs)
+			return
+		}
+		printResult(filename, longestFileName, brief, mimeOutput, detectFileType(target))
+		return
+	}
+
+	switch {
+	case fi.Mode()&os.ModeSymlink != 0:
+		reallink, _ := os.Readlink(filename)
+		printResult(filename, longestFileName, brief, mimeOutput, "symbolic link to "+reallink)
+	case fi.Mode()&os.ModeSocket != 0:
+		printResult(filename, longestFileName, brief, mimeOutput, "socket")
+	case fi.Mode()&os.ModeCharDevice != 0:
+		printResult(filename, longestFileName, brief, mimeOutput, "character special device")
+	case fi.Mode()&os.ModeDevice != 0:
+		printResult(filename, longestFileName, brief, mimeOutput, "device file")
+	case fi.Mode()&os.ModeNamedPipe != 0:
+		printResult(filename, longestFileName, brief, mimeOutput, "fifo")
+	default:
+		printResult(filename, longestFileName, brief, mimeOutput, detectFileType(filename))
+	}
+}
+
+func printResult(filename string, longestFileName int, brief bool, mimeOutput bool, desc string) {
+	if desc == "" {
+		return
+	}
+	if mimeOutput {
+		desc = mimeForDescription(desc)
+	}
+	if !brief {
+		fmt.Print(filename + ": ")
+		for padding := 0; padding < longestFileName+2-len(filename); padding++ {
+			fmt.Print(" ")
+		}
+	}
+	fmt.Println(desc)
+}
+
+func detectFileType(filename string) string {
 
 	/*---------------Read file------------------------*/
 	file, err := os.OpenFile(filename, os.O_RDONLY, 0666)
 	if err != nil {
 		fmt.Fprint(os.Stderr, "File error.")
-		return
+		return ""
 	}
 	defer file.Close()
 
@@ -673,15 +750,14 @@ func regularFile(filename string) {
 	numByte, err := file.Read(contentByte)
 	if err != nil && err != io.EOF {
 		fmt.Fprint(os.Stderr, "File error.")
-		return
+		return ""
 	}
 	contentByte = contentByte[:numByte]
 
 	lenb := len(contentByte)
 	/*---------------Read file end------------------------*/
 	if desc := describeByExtension(filename, contentByte); desc != "" {
-		fmt.Print(desc)
-		return
+		return desc
 	}
 	magic := -1
 	if lenb > 112 {
@@ -690,10 +766,10 @@ func regularFile(filename string) {
 
 	for _, matcher := range matchers {
 		if lenb >= matcher.minLen && matcher.match(contentByte, lenb, magic) {
-			fmt.Print(matcher.describe(contentByte, lenb, magic, file))
-			return
+			return matcher.describe(contentByte, lenb, magic, file)
 		}
 	}
+	return ""
 }
 
 func describeByExtension(filename string, contentByte []byte) string {
@@ -721,6 +797,69 @@ func describeByExtension(filename string, contentByte []byte) string {
 	}
 
 	return ""
+}
+
+func mimeForDescription(desc string) string {
+	descLower := strings.ToLower(desc)
+
+	switch {
+	case descLower == "directory":
+		return "inode/directory"
+	case strings.HasPrefix(descLower, "symbolic link to "):
+		return "inode/symlink"
+	case descLower == "png image data":
+		return "image/png"
+	case descLower == "gif image data":
+		return "image/gif"
+	case strings.HasPrefix(descLower, "jpeg / jpg image data"):
+		return "image/jpeg"
+	case descLower == "pdf image":
+		return "application/pdf"
+	case strings.Contains(descLower, "zip archive"):
+		return "application/zip"
+	case strings.Contains(descLower, "posix tar archive"):
+		return "application/x-tar"
+	case strings.Contains(descLower, "gzip compressed data"):
+		return "application/gzip"
+	case strings.Contains(descLower, "bzip2 compressed data"):
+		return "application/x-bzip2"
+	case strings.Contains(descLower, "xz compressed data"):
+		return "application/x-xz"
+	case strings.Contains(descLower, "zstandard compressed data"):
+		return "application/zstd"
+	case strings.Contains(descLower, "lz4 compressed data"):
+		return "application/x-lz4"
+	case strings.Contains(descLower, "lzip compressed data"):
+		return "application/x-lzip"
+	case strings.Contains(descLower, "rar archive data"):
+		return "application/vnd.rar"
+	case strings.Contains(descLower, "7zip archive data"):
+		return "application/x-7z-compressed"
+	case strings.Contains(descLower, "microsoft word 2007+"):
+		return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+	case strings.Contains(descLower, "microsoft excel 2007+"):
+		return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+	case strings.Contains(descLower, "microsoft powerpoint 2007+"):
+		return "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+	case strings.Contains(descLower, "epub document"):
+		return "application/epub+zip"
+	case strings.Contains(descLower, "email message (eml)"):
+		return "message/rfc822"
+	case strings.Contains(descLower, "openvpn configuration"):
+		return "application/x-openvpn-profile"
+	case strings.Contains(descLower, "vmware ova appliance"):
+		return "application/x-virtualbox-ova"
+	case strings.Contains(descLower, "vmware virtual disk"):
+		return "application/x-vmdk"
+	case strings.Contains(descLower, "vmware snapshot state"):
+		return "application/x-vmware-vmsn"
+	case strings.Contains(descLower, "vmware vm configuration"):
+		return "text/plain"
+	case strings.Contains(descLower, "vmware supplemental configuration"):
+		return "text/plain"
+	}
+
+	return "application/octet-stream"
 }
 
 func doElf(contentByte []byte) string {
