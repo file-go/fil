@@ -472,6 +472,18 @@ func detectTextSubtype(b []byte) string {
 		return "PowerShell script"
 	}
 
+	if strings.HasPrefix(topLower, "\n#!/usr/bin/perl") || strings.HasPrefix(topLower, "\n#!/usr/bin/env perl") {
+		return "Perl script"
+	}
+
+	if looksLikePerl(topLower) {
+		return "Perl script"
+	}
+
+	if looksLikeBatch(topLower) {
+		return "Windows batch script"
+	}
+
 	if looksLikeJavaScript(topLower) {
 		return "JavaScript"
 	}
@@ -506,7 +518,7 @@ func looksLikeOpenVPN(s string) bool {
 }
 
 func looksLikeJavaScript(s string) bool {
-	if looksLikePython(s) || looksLikePowerShell(s) {
+	if looksLikePython(s) || looksLikePowerShell(s) || looksLikePerl(s) || looksLikeBatch(s) {
 		return false
 	}
 
@@ -567,6 +579,49 @@ func looksLikePowerShell(s string) bool {
 		hits++
 	}
 	if strings.Contains(s, "get-") || strings.Contains(s, "set-") || strings.Contains(s, "new-") {
+		hits++
+	}
+	return hits >= 2
+}
+
+func looksLikePerl(s string) bool {
+	hits := 0
+	if strings.Contains(s, "\nuse strict;") || strings.Contains(s, "\nuse warnings;") {
+		hits++
+	}
+	if strings.Contains(s, "\nmy $") {
+		hits++
+	}
+	if strings.Contains(s, "\nsub ") {
+		hits++
+	}
+	if strings.Contains(s, "print $") || strings.Contains(s, "print \"") || strings.Contains(s, "print '") {
+		hits++
+	}
+	if strings.Contains(s, "elsif ") || strings.Contains(s, "unless ") {
+		hits++
+	}
+	return hits >= 2
+}
+
+func looksLikeBatch(s string) bool {
+	hits := 0
+	if strings.Contains(s, "\n@echo off") {
+		hits++
+	}
+	if strings.Contains(s, "\nsetlocal") || strings.Contains(s, "\nendlocal") {
+		hits++
+	}
+	if strings.Contains(s, "\nif exist ") || strings.Contains(s, "\nif not exist ") {
+		hits++
+	}
+	if strings.Contains(s, "\ngoto ") || strings.Contains(s, "\ncall ") {
+		hits++
+	}
+	if strings.Contains(s, "\n%") {
+		hits++
+	}
+	if strings.Contains(s, "\nrem ") || strings.Contains(s, "\n::") {
 		hits++
 	}
 	return hits >= 2
