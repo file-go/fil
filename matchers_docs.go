@@ -75,9 +75,9 @@ var matcherRtf = fileMatcher{
 
 var matcherHtml = fileMatcher{
 	name:   "html",
-	minLen: 33,
+	minLen: 5,
 	match: func(b []byte, lenb int, magic int) bool {
-		return lenb > 32 && (HasPrefix(b, "<!DOCTYPE html") || HasPrefix(b, "<head>"))
+		return looksLikeHTMLDocument(b)
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
 		return "HTML document"
@@ -140,4 +140,118 @@ var matcherJSON = fileMatcher{
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
 		return "JSON data"
 	},
+}
+
+func looksLikeHTMLDocument(b []byte) bool {
+	if len(b) < 5 {
+		return false
+	}
+
+	end := len(b)
+	if end > 8192 {
+		end = 8192
+	}
+	sample := bytes.TrimSpace(b[:end])
+	if len(sample) == 0 {
+		return false
+	}
+
+	utf8Lower := bytes.ToLower(stripUTF8BOM(sample))
+	if hasHTMLMarkers(utf8Lower) {
+		return true
+	}
+
+	if utf16Decoded, ok := decodeUTF16ToASCII(sample); ok {
+		return hasHTMLMarkers(bytes.ToLower(bytes.TrimSpace(utf16Decoded)))
+	}
+
+	return false
+}
+
+func hasHTMLMarkers(s []byte) bool {
+	return bytes.Contains(s, []byte("<!doctype html")) ||
+		bytes.Contains(s, []byte("<html")) ||
+		bytes.Contains(s, []byte("<head")) ||
+		bytes.Contains(s, []byte("<body")) ||
+		bytes.Contains(s, []byte("<title")) ||
+		bytes.Contains(s, []byte("<meta "))
+}
+
+func stripUTF8BOM(b []byte) []byte {
+	if len(b) >= 3 && b[0] == 0xEF && b[1] == 0xBB && b[2] == 0xBF {
+		return b[3:]
+	}
+	return b
+}
+
+func decodeUTF16ToASCII(b []byte) ([]byte, bool) {
+	if len(b) < 4 {
+		return nil, false
+	}
+
+	le := false
+	be := false
+	start := 0
+	switch {
+	case len(b) >= 2 && b[0] == 0xFF && b[1] == 0xFE:
+		le = true
+		start = 2
+	case len(b) >= 2 && b[0] == 0xFE && b[1] == 0xFF:
+		be = true
+		start = 2
+	default:
+		limit := len(b)
+		if limit > 256 {
+			limit = 256
+		}
+		evenZero := 0
+		oddZero := 0
+		for i := 0; i < limit; i++ {
+			if b[i] != 0x00 {
+				continue
+			}
+			if i%2 == 0 {
+				evenZero++
+			} else {
+				oddZero++
+			}
+		}
+		if oddZero > evenZero*2 && oddZero >= 8 {
+			le = true
+		} else if evenZero > oddZero*2 && evenZero >= 8 {
+			be = true
+		} else {
+			return nil, false
+		}
+	}
+
+	if (len(b)-start) < 4 {
+		return nil, false
+	}
+
+	out := make([]byte, 0, (len(b)-start)/2)
+	printables := 0
+	for i := start; i+1 < len(b); i += 2 {
+		var ch byte
+		var other byte
+		if le {
+			ch = b[i]
+			other = b[i+1]
+		} else if be {
+			ch = b[i+1]
+			other = b[i]
+		}
+		if other != 0x00 {
+			continue
+		}
+		out = append(out, ch)
+		if ch >= 0x20 && ch <= 0x7E {
+			printables++
+		}
+	}
+
+	if len(out) < 4 || printables < 4 {
+		return nil, false
+	}
+	return out, true
 }
