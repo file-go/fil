@@ -12,3 +12,14 @@ var matcherText = fileMatcher{
 		return describeText(b)
 	},
 }
+
+var matcherDataFallback = fileMatcher{
+	name:   "data",
+	minLen: 1,
+	match: func(b []byte, lenb int, magic int) bool {
+		return !isText(b)
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "data"
+	},
+}

@@ -63,4 +63,5 @@ var matchers = []fileMatcher{
 	matcherHtml,
 	matcherXml,
 	matcherText,
+	matcherDataFallback,
 }
