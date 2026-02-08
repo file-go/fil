@@ -604,6 +604,7 @@ func main() {
 	followSymlinks := flag.Bool("L", false, "follow symlinks")
 	mimeOutput := flag.Bool("i", false, "MIME type output")
 	jsonOutput := flag.Bool("json", false, "JSONL output")
+	filesFrom := flag.String("files-from", "", "read file paths from a file ('-' for stdin)")
 	flag.Usage = usage
 	flag.Parse()
 
@@ -611,11 +612,26 @@ func main() {
 		usage()
 	}
 
-	// Expand the wildcard pattern into a list of file names
-	files, err := filepath.Glob(flag.Arg(0))
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return
+	var files []string
+	if *filesFrom != "" {
+		list, err := readFilesFrom(*filesFrom)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return
+		}
+		files = list
+	} else {
+		// Expand the wildcard pattern into a list of file names
+		if flag.Arg(0) == "-" {
+			handleStdin(*brief, *mimeOutput, *jsonOutput)
+			return
+		}
+		var err error
+		files, err = filepath.Glob(flag.Arg(0))
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return
+		}
 	}
 
 	// Get the length of the longest file name
@@ -628,16 +644,22 @@ func main() {
 
 	visitedDirs := make(map[string]struct{})
 	for _, filename := range files {
+		if filename == "-" && *filesFrom != "" {
+			handleStdin(*brief, *mimeOutput, *jsonOutput)
+			continue
+		}
 		processPath(filename, longestFileName, *brief, *mimeOutput, *followSymlinks, *jsonOutput, visitedDirs)
 	}
 }
 
 func usage() {
-	fmt.Println("Usage: fil [-b] [-i] [-L] [--json] FILE_NAME")
+	fmt.Println("Usage: fil [-b] [-i] [-L] [--json] [--files-from=PATH] FILE_NAME")
+	fmt.Println("       fil -")
 	fmt.Println("  -b    brief output (type only)")
 	fmt.Println("  -i    MIME type output")
 	fmt.Println("  -L    follow symlinks")
 	fmt.Println("  --json JSONL output")
+	fmt.Println("  --files-from=PATH read file paths from a file ('-' for stdin)")
 	os.Exit(0)
 }
 
@@ -686,11 +708,21 @@ func processPath(filename string, longestFileName int, brief bool, mimeOutput bo
 				if tinfo.IsDir() {
 					return nil
 				}
-				printResult(path, longestFileName, brief, mimeOutput, jsonOutput, detectFileType(target))
+				desc, derr := detectFileType(target)
+				if derr != nil {
+					emitError(path, derr, jsonOutput)
+					return nil
+				}
+				printResult(path, longestFileName, brief, mimeOutput, jsonOutput, desc)
 				return nil
 			}
 			if d.Type().IsRegular() {
-				printResult(path, longestFileName, brief, mimeOutput, jsonOutput, detectFileType(path))
+				desc, derr := detectFileType(path)
+				if derr != nil {
+					emitError(path, derr, jsonOutput)
+					return nil
+				}
+				printResult(path, longestFileName, brief, mimeOutput, jsonOutput, desc)
 			}
 			return nil
 		})
@@ -712,7 +744,12 @@ func processPath(filename string, longestFileName int, brief bool, mimeOutput bo
 			processPath(target, longestFileName, brief, mimeOutput, followSymlinks, jsonOutput, visitedDirs)
 			return
 		}
-		printResult(filename, longestFileName, brief, mimeOutput, jsonOutput, detectFileType(target))
+		desc, derr := detectFileType(target)
+		if derr != nil {
+			emitError(filename, derr, jsonOutput)
+			return
+		}
+		printResult(filename, longestFileName, brief, mimeOutput, jsonOutput, desc)
 		return
 	}
 
@@ -729,7 +766,12 @@ func processPath(filename string, longestFileName int, brief bool, mimeOutput bo
 	case fi.Mode()&os.ModeNamedPipe != 0:
 		printResult(filename, longestFileName, brief, mimeOutput, jsonOutput, "fifo")
 	default:
-		printResult(filename, longestFileName, brief, mimeOutput, jsonOutput, detectFileType(filename))
+		desc, derr := detectFileType(filename)
+		if derr != nil {
+			emitError(filename, derr, jsonOutput)
+			return
+		}
+		printResult(filename, longestFileName, brief, mimeOutput, jsonOutput, desc)
 	}
 }
 
@@ -737,12 +779,12 @@ func printResult(filename string, longestFileName int, brief bool, mimeOutput bo
 	if desc == "" {
 		return
 	}
-	if mimeOutput {
-		desc = mimeForDescription(desc)
-	}
 	if jsonOutput {
 		emitJSON(filename, desc, mimeOutput, "")
 		return
+	}
+	if mimeOutput {
+		desc = mimeForDescription(desc)
 	}
 	if !brief {
 		fmt.Print(filename + ": ")
@@ -784,13 +826,12 @@ func emitError(path string, err error, jsonOutput bool) {
 	}
 }
 
-func detectFileType(filename string) string {
+func detectFileType(filename string) (string, error) {
 
 	/*---------------Read file------------------------*/
 	file, err := os.OpenFile(filename, os.O_RDONLY, 0666)
 	if err != nil {
-		fmt.Fprint(os.Stderr, "File error.")
-		return ""
+		return "", err
 	}
 	defer file.Close()
 
@@ -798,11 +839,14 @@ func detectFileType(filename string) string {
 
 	numByte, err := file.Read(contentByte)
 	if err != nil && err != io.EOF {
-		fmt.Fprint(os.Stderr, "File error.")
-		return ""
+		return "", err
 	}
 	contentByte = contentByte[:numByte]
 
+	return detectFromBytes(contentByte, filename, file)
+}
+
+func detectFromBytes(contentByte []byte, filename string, file *os.File) (string, error) {
 	lenb := len(contentByte)
 	/*---------------Read file end------------------------*/
 	magic := -1
@@ -812,10 +856,63 @@ func detectFileType(filename string) string {
 
 	for _, matcher := range matchers {
 		if lenb >= matcher.minLen && matcher.match(contentByte, lenb, magic) {
-			return matcher.describe(contentByte, lenb, magic, file)
+			return matcher.describe(contentByte, lenb, magic, file), nil
 		}
 	}
-	return ""
+	return "", nil
+}
+
+func handleStdin(brief bool, mimeOutput bool, jsonOutput bool) {
+	buf := make([]byte, MaxBytesToRead)
+	n := 0
+	for n < len(buf) {
+		readN, err := os.Stdin.Read(buf[n:])
+		if readN > 0 {
+			n += readN
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			emitError("stdin", err, jsonOutput)
+			return
+		}
+	}
+	desc, derr := detectFromBytes(buf[:n], "stdin", nil)
+	if derr != nil {
+		emitError("stdin", derr, jsonOutput)
+		return
+	}
+	printResult("stdin", 0, brief, mimeOutput, jsonOutput, desc)
+}
+
+func readFilesFrom(path string) ([]string, error) {
+	var r io.Reader
+	if path == "-" {
+		r = os.Stdin
+	} else {
+		f, err := os.Open(path)
+		if err != nil {
+			return nil, err
+		}
+		defer f.Close()
+		r = f
+	}
+
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return nil, err
+	}
+	lines := strings.Split(string(data), "\n")
+	out := make([]string, 0, len(lines))
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		out = append(out, line)
+	}
+	return out, nil
 }
 
 func mimeForDescription(desc string) string {
@@ -1145,6 +1242,10 @@ func doZip(file *os.File) string {
 	// Next, there are some other strings that seem to appear in Office documents of multiple types; For these,
 	// we will open the zip real quick and look for the Word, Excel, PowerPoint xml file, or epub mimetype file. Otherwise it is a regular zip.
 
+	if file == nil {
+		return "Zip archive data"
+	}
+
 	if _, err := file.Seek(0, 0); err != nil {
 		return "File error"
 	}
@@ -1220,6 +1321,9 @@ func doZip(file *os.File) string {
 
 func doTar(file *os.File) string {
 	// OVA is a tar containing at least one .ovf descriptor file.
+	if file == nil {
+		return "Posix tar archive"
+	}
 	if _, err := file.Seek(0, 0); err != nil {
 		return "Posix tar archive"
 	}
