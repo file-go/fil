@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 )
 
 const (
@@ -585,6 +586,16 @@ var matchers = []fileMatcher{
 			return "XML document"
 		},
 	},
+	{
+		name:   "text",
+		minLen: 1,
+		match: func(b []byte, lenb int, magic int) bool {
+			return isText(b)
+		},
+		describe: func(b []byte, lenb int, magic int, file *os.File) string {
+			return describeText(b)
+		},
+	},
 }
 
 func main() {
@@ -756,9 +767,6 @@ func detectFileType(filename string) string {
 
 	lenb := len(contentByte)
 	/*---------------Read file end------------------------*/
-	if desc := describeByExtension(filename, contentByte); desc != "" {
-		return desc
-	}
 	magic := -1
 	if lenb > 112 {
 		magic = peekLe(contentByte[60:], 4)
@@ -769,33 +777,6 @@ func detectFileType(filename string) string {
 			return matcher.describe(contentByte, lenb, magic, file)
 		}
 	}
-	return ""
-}
-
-func describeByExtension(filename string, contentByte []byte) string {
-	ext := strings.ToLower(filepath.Ext(filename))
-	if ext == "" {
-		return ""
-	}
-
-	contentLower := strings.ToLower(string(contentByte))
-
-	switch ext {
-	case ".eml":
-		// Basic sanity check: common RFC 5322 headers
-		if strings.Contains(contentLower, "\ndate:") && strings.Contains(contentLower, "\nfrom:") {
-			return "Email message (EML)"
-		}
-	case ".ovpn":
-		// Common OpenVPN config directives
-		if strings.Contains(contentLower, "\nclient") ||
-			strings.Contains(contentLower, "\nremote ") ||
-			strings.Contains(contentLower, "\nproto ") ||
-			strings.Contains(contentLower, "\ndev ") {
-			return "OpenVPN configuration"
-		}
-	}
-
 	return ""
 }
 
@@ -860,6 +841,134 @@ func mimeForDescription(desc string) string {
 	}
 
 	return "application/octet-stream"
+}
+
+func isText(b []byte) bool {
+	if len(b) == 0 {
+		return false
+	}
+
+	badCtrl := 0
+	for _, c := range b {
+		if c == 0x00 {
+			return false
+		}
+		if c < 0x20 && c != '\n' && c != '\r' && c != '\t' && c != '\f' && c != '\b' {
+			badCtrl++
+		}
+	}
+
+	if badCtrl > 0 && badCtrl*100/len(b) > 2 {
+		return false
+	}
+
+	if isASCIIOnly(b) {
+		return true
+	}
+	return utf8.Valid(b)
+}
+
+func isASCIIOnly(b []byte) bool {
+	for _, c := range b {
+		if c >= 0x80 {
+			return false
+		}
+	}
+	return true
+}
+
+func describeText(b []byte) string {
+	base := "UTF-8 text"
+	if isASCIIOnly(b) {
+		base = "ASCII text"
+	}
+
+	subtype := detectTextSubtype(b)
+	if subtype != "" {
+		return base + ", " + subtype
+	}
+	return base
+}
+
+func detectTextSubtype(b []byte) string {
+	const maxScan = 4096
+	end := len(b)
+	if end > maxScan {
+		end = maxScan
+	}
+
+	top := string(b[:end])
+	topLower := strings.ToLower(top)
+	topLower = "\n" + topLower
+
+	if hasAll(topLower, "\nfrom:", "\nto:", "\nsubject:", "\ndate:") {
+		return "email"
+	}
+
+	if looksLikeOpenVPN(topLower) {
+		return "OpenVPN config"
+	}
+
+	if strings.HasPrefix(top, "#!/bin/sh") || strings.HasPrefix(top, "#!/bin/bash") {
+		return "shell script"
+	}
+
+	if strings.HasPrefix(top, "#!/usr/bin/python") || strings.HasPrefix(top, "#!/usr/bin/env python") {
+		return "Python script"
+	}
+
+	if strings.Contains(topLower, "\n#requires") || strings.Contains(topLower, "\nparam(") || strings.Contains(topLower, "$psversiontable") {
+		return "PowerShell script"
+	}
+
+	if looksLikeJavaScript(topLower) {
+		return "JavaScript"
+	}
+
+	return ""
+}
+
+func hasAll(s string, parts ...string) bool {
+	for _, p := range parts {
+		if !strings.Contains(s, p) {
+			return false
+		}
+	}
+	return true
+}
+
+func looksLikeOpenVPN(s string) bool {
+	hits := 0
+	if strings.Contains(s, "\nclient") {
+		hits++
+	}
+	if strings.Contains(s, "\ndev ") {
+		hits++
+	}
+	if strings.Contains(s, "\nproto ") {
+		hits++
+	}
+	if strings.Contains(s, "\nremote ") {
+		hits++
+	}
+	return hits >= 2
+}
+
+func looksLikeJavaScript(s string) bool {
+	hits := 0
+	if strings.Contains(s, "function ") || strings.Contains(s, "\nfunction ") {
+		hits++
+	}
+	if strings.Contains(s, "const ") || strings.Contains(s, "\nconst ") {
+		hits++
+	}
+	if strings.Contains(s, "import ") || strings.Contains(s, "\nimport ") {
+		hits++
+	}
+	if strings.Contains(s, "export ") || strings.Contains(s, "\nexport ") {
+		hits++
+	}
+	return hits >= 2
 }
 
 func doElf(contentByte []byte) string {
