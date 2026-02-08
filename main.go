@@ -891,7 +891,7 @@ func describeText(b []byte) string {
 }
 
 func detectTextSubtype(b []byte) string {
-	const maxScan = 4096
+	const maxScan = 32 * 1024
 	end := len(b)
 	if end > maxScan {
 		end = maxScan
