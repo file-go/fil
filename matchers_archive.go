@@ -159,9 +159,10 @@ var matcherGzip = fileMatcher{
 
 var matcherRar = fileMatcher{
 	name:   "rar",
-	minLen: 17,
+	minLen: 7,
 	match: func(b []byte, lenb int, magic int) bool {
-		return lenb > 16 && HasPrefix(b, "\x52\x61\x72\x21\x1A\x07\x01\x00")
+		return (lenb >= 8 && HasPrefix(b, "\x52\x61\x72\x21\x1A\x07\x01\x00")) ||
+			(lenb >= 7 && HasPrefix(b, "\x52\x61\x72\x21\x1A\x07\x00"))
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
 		return "RAR archive data"
