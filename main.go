@@ -349,6 +349,40 @@ func mimeForDescription(desc string) string {
 		return "application/vnd.openxmlformats-officedocument.presentationml.presentation"
 	case strings.Contains(descLower, "epub document"):
 		return "application/epub+zip"
+	case descLower == "opendocument text":
+		return "application/vnd.oasis.opendocument.text"
+	case descLower == "opendocument text template":
+		return "application/vnd.oasis.opendocument.text-template"
+	case descLower == "opendocument spreadsheet":
+		return "application/vnd.oasis.opendocument.spreadsheet"
+	case descLower == "opendocument spreadsheet template":
+		return "application/vnd.oasis.opendocument.spreadsheet-template"
+	case descLower == "opendocument presentation":
+		return "application/vnd.oasis.opendocument.presentation"
+	case descLower == "opendocument presentation template":
+		return "application/vnd.oasis.opendocument.presentation-template"
+	case descLower == "opendocument graphics":
+		return "application/vnd.oasis.opendocument.graphics"
+	case descLower == "opendocument graphics template":
+		return "application/vnd.oasis.opendocument.graphics-template"
+	case descLower == "opendocument chart":
+		return "application/vnd.oasis.opendocument.chart"
+	case descLower == "opendocument chart template":
+		return "application/vnd.oasis.opendocument.chart-template"
+	case descLower == "opendocument image":
+		return "application/vnd.oasis.opendocument.image"
+	case descLower == "opendocument image template":
+		return "application/vnd.oasis.opendocument.image-template"
+	case descLower == "opendocument formula":
+		return "application/vnd.oasis.opendocument.formula"
+	case descLower == "opendocument formula template":
+		return "application/vnd.oasis.opendocument.formula-template"
+	case descLower == "opendocument text web":
+		return "application/vnd.oasis.opendocument.text-web"
+	case descLower == "opendocument text master":
+		return "application/vnd.oasis.opendocument.text-master"
+	case descLower == "opendocument database":
+		return "application/vnd.oasis.opendocument.database"
 	case descLower == "opendocument":
 		return "application/vnd.oasis.opendocument"
 	case strings.Contains(descLower, "email message (eml)"):
@@ -625,9 +659,9 @@ func doZip(file *os.File) string {
 				if err != nil {
 					return "Error reading first 200 bytes"
 				}
-				mimeSample := string(first200Bytes)
-				if strings.Contains(mimeSample, "application/vnd.oasis.opendocument.") {
-					return "OpenDocument"
+				mimeSample := strings.TrimSpace(string(first200Bytes))
+				if desc := openDocumentDescriptionForMIME(mimeSample); desc != "" {
+					return desc
 				}
 				if strings.Contains(mimeSample, "epub") {
 					return "EPUB document"
@@ -637,6 +671,52 @@ func doZip(file *os.File) string {
 	}
 
 	return "Zip archive data"
+}
+
+func openDocumentDescriptionForMIME(mime string) string {
+	switch mime {
+	case "application/vnd.oasis.opendocument.text":
+		return "OpenDocument text"
+	case "application/vnd.oasis.opendocument.text-template":
+		return "OpenDocument text template"
+	case "application/vnd.oasis.opendocument.text-web":
+		return "OpenDocument text web"
+	case "application/vnd.oasis.opendocument.text-master":
+		return "OpenDocument text master"
+	case "application/vnd.oasis.opendocument.spreadsheet":
+		return "OpenDocument spreadsheet"
+	case "application/vnd.oasis.opendocument.spreadsheet-template":
+		return "OpenDocument spreadsheet template"
+	case "application/vnd.oasis.opendocument.presentation":
+		return "OpenDocument presentation"
+	case "application/vnd.oasis.opendocument.presentation-template":
+		return "OpenDocument presentation template"
+	case "application/vnd.oasis.opendocument.graphics":
+		return "OpenDocument graphics"
+	case "application/vnd.oasis.opendocument.graphics-template":
+		return "OpenDocument graphics template"
+	case "application/vnd.oasis.opendocument.chart":
+		return "OpenDocument chart"
+	case "application/vnd.oasis.opendocument.chart-template":
+		return "OpenDocument chart template"
+	case "application/vnd.oasis.opendocument.image":
+		return "OpenDocument image"
+	case "application/vnd.oasis.opendocument.image-template":
+		return "OpenDocument image template"
+	case "application/vnd.oasis.opendocument.formula":
+		return "OpenDocument formula"
+	case "application/vnd.oasis.opendocument.formula-template":
+		return "OpenDocument formula template"
+	case "application/vnd.oasis.opendocument.database":
+		return "OpenDocument database"
+	case "application/vnd.oasis.opendocument":
+		return "OpenDocument"
+	default:
+		if strings.HasPrefix(mime, "application/vnd.oasis.opendocument.") {
+			return "OpenDocument"
+		}
+		return ""
+	}
 }
 
 func doTar(file *os.File) string {
