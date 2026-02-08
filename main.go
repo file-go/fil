@@ -235,6 +235,9 @@ func detectFromBytes(contentByte []byte, filename string, file *os.File) (string
 		activeFile = nil
 	}()
 	lenb := len(contentByte)
+	if lenb == 0 {
+		return "empty", nil
+	}
 	/*---------------Read file end------------------------*/
 	magic := -1
 	if lenb > 112 {
@@ -457,7 +460,15 @@ func detectTextSubtype(b []byte) string {
 		return "Python script"
 	}
 
+	if looksLikePython(topLower) {
+		return "Python script"
+	}
+
 	if strings.Contains(topLower, "\n#requires") || strings.Contains(topLower, "\nparam(") || strings.Contains(topLower, "$psversiontable") {
+		return "PowerShell script"
+	}
+
+	if looksLikePowerShell(topLower) {
 		return "PowerShell script"
 	}
 
@@ -495,7 +506,17 @@ func looksLikeOpenVPN(s string) bool {
 }
 
 func looksLikeJavaScript(s string) bool {
+	if looksLikePython(s) || looksLikePowerShell(s) {
+		return false
+	}
+
 	hits := 0
+	if strings.Contains(s, "=>") {
+		hits++
+	}
+	if strings.Contains(s, "\nlet ") {
+		hits++
+	}
 	if strings.Contains(s, "function ") || strings.Contains(s, "\nfunction ") {
 		hits++
 	}
@@ -506,6 +527,46 @@ func looksLikeJavaScript(s string) bool {
 		hits++
 	}
 	if strings.Contains(s, "export ") || strings.Contains(s, "\nexport ") {
+		hits++
+	}
+	return hits >= 2
+}
+
+func looksLikePython(s string) bool {
+	hits := 0
+	if strings.Contains(s, "\ndef ") {
+		hits++
+	}
+	if strings.Contains(s, "\nclass ") {
+		hits++
+	}
+	if strings.Contains(s, "\nfrom ") && strings.Contains(s, " import ") {
+		hits++
+	}
+	if strings.Contains(s, "\nimport ") {
+		hits++
+	}
+	if strings.Contains(s, "\nif __name__ == \"__main__\":") || strings.Contains(s, "\nif __name__ == '__main__':") {
+		hits++
+	}
+	return hits >= 2
+}
+
+func looksLikePowerShell(s string) bool {
+	hits := 0
+	if strings.Contains(s, "\nfunction ") {
+		hits++
+	}
+	if strings.Contains(s, "\nparam(") {
+		hits++
+	}
+	if strings.Contains(s, "\n$") {
+		hits++
+	}
+	if strings.Contains(s, "write-host") || strings.Contains(s, "write-output") {
+		hits++
+	}
+	if strings.Contains(s, "get-") || strings.Contains(s, "set-") || strings.Contains(s, "new-") {
 		hits++
 	}
 	return hits >= 2
