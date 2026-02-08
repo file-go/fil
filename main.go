@@ -12,6 +12,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -602,6 +603,7 @@ func main() {
 	brief := flag.Bool("b", false, "brief output (type only)")
 	followSymlinks := flag.Bool("L", false, "follow symlinks")
 	mimeOutput := flag.Bool("i", false, "MIME type output")
+	jsonOutput := flag.Bool("json", false, "JSONL output")
 	flag.Usage = usage
 	flag.Parse()
 
@@ -626,27 +628,28 @@ func main() {
 
 	visitedDirs := make(map[string]struct{})
 	for _, filename := range files {
-		processPath(filename, longestFileName, *brief, *mimeOutput, *followSymlinks, visitedDirs)
+		processPath(filename, longestFileName, *brief, *mimeOutput, *followSymlinks, *jsonOutput, visitedDirs)
 	}
 }
 
 func usage() {
-	fmt.Println("Usage: fil [-b] [-i] [-L] FILE_NAME")
+	fmt.Println("Usage: fil [-b] [-i] [-L] [--json] FILE_NAME")
 	fmt.Println("  -b    brief output (type only)")
 	fmt.Println("  -i    MIME type output")
 	fmt.Println("  -L    follow symlinks")
+	fmt.Println("  --json JSONL output")
 	os.Exit(0)
 }
 
-func processPath(filename string, longestFileName int, brief bool, mimeOutput bool, followSymlinks bool, visitedDirs map[string]struct{}) {
+func processPath(filename string, longestFileName int, brief bool, mimeOutput bool, followSymlinks bool, jsonOutput bool, visitedDirs map[string]struct{}) {
 	fi, err := os.Lstat(filename)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, filename+": "+err.Error())
+		emitError(filename, err, jsonOutput)
 		return
 	}
 
 	if len(filename) > MaxFileLength {
-		fmt.Fprintln(os.Stderr, "File name too long.")
+		emitError(filename, fmt.Errorf("file name too long"), jsonOutput)
 		return
 	}
 
@@ -663,7 +666,7 @@ func processPath(filename string, longestFileName int, brief bool, mimeOutput bo
 		visitedDirs[realPath] = struct{}{}
 		filepath.WalkDir(realPath, func(path string, d os.DirEntry, err error) error {
 			if err != nil {
-				fmt.Fprintln(os.Stderr, path+": "+err.Error())
+				emitError(path, err, jsonOutput)
 				return nil
 			}
 			if d.IsDir() {
@@ -672,22 +675,22 @@ func processPath(filename string, longestFileName int, brief bool, mimeOutput bo
 			if d.Type()&os.ModeSymlink != 0 && followSymlinks {
 				target, err := filepath.EvalSymlinks(path)
 				if err != nil {
-					fmt.Fprintln(os.Stderr, path+": "+err.Error())
+					emitError(path, err, jsonOutput)
 					return nil
 				}
 				tinfo, err := os.Stat(target)
 				if err != nil {
-					fmt.Fprintln(os.Stderr, path+": "+err.Error())
+					emitError(path, err, jsonOutput)
 					return nil
 				}
 				if tinfo.IsDir() {
 					return nil
 				}
-				printResult(path, longestFileName, brief, mimeOutput, detectFileType(target))
+				printResult(path, longestFileName, brief, mimeOutput, jsonOutput, detectFileType(target))
 				return nil
 			}
 			if d.Type().IsRegular() {
-				printResult(path, longestFileName, brief, mimeOutput, detectFileType(path))
+				printResult(path, longestFileName, brief, mimeOutput, jsonOutput, detectFileType(path))
 			}
 			return nil
 		})
@@ -697,45 +700,49 @@ func processPath(filename string, longestFileName int, brief bool, mimeOutput bo
 	if fi.Mode()&os.ModeSymlink != 0 && followSymlinks {
 		target, err := filepath.EvalSymlinks(filename)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, filename+": "+err.Error())
+			emitError(filename, err, jsonOutput)
 			return
 		}
 		tinfo, err := os.Stat(target)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, filename+": "+err.Error())
+			emitError(filename, err, jsonOutput)
 			return
 		}
 		if tinfo.IsDir() {
-			processPath(target, longestFileName, brief, mimeOutput, followSymlinks, visitedDirs)
+			processPath(target, longestFileName, brief, mimeOutput, followSymlinks, jsonOutput, visitedDirs)
 			return
 		}
-		printResult(filename, longestFileName, brief, mimeOutput, detectFileType(target))
+		printResult(filename, longestFileName, brief, mimeOutput, jsonOutput, detectFileType(target))
 		return
 	}
 
 	switch {
 	case fi.Mode()&os.ModeSymlink != 0:
 		reallink, _ := os.Readlink(filename)
-		printResult(filename, longestFileName, brief, mimeOutput, "symbolic link to "+reallink)
+		printResult(filename, longestFileName, brief, mimeOutput, jsonOutput, "symbolic link to "+reallink)
 	case fi.Mode()&os.ModeSocket != 0:
-		printResult(filename, longestFileName, brief, mimeOutput, "socket")
+		printResult(filename, longestFileName, brief, mimeOutput, jsonOutput, "socket")
 	case fi.Mode()&os.ModeCharDevice != 0:
-		printResult(filename, longestFileName, brief, mimeOutput, "character special device")
+		printResult(filename, longestFileName, brief, mimeOutput, jsonOutput, "character special device")
 	case fi.Mode()&os.ModeDevice != 0:
-		printResult(filename, longestFileName, brief, mimeOutput, "device file")
+		printResult(filename, longestFileName, brief, mimeOutput, jsonOutput, "device file")
 	case fi.Mode()&os.ModeNamedPipe != 0:
-		printResult(filename, longestFileName, brief, mimeOutput, "fifo")
+		printResult(filename, longestFileName, brief, mimeOutput, jsonOutput, "fifo")
 	default:
-		printResult(filename, longestFileName, brief, mimeOutput, detectFileType(filename))
+		printResult(filename, longestFileName, brief, mimeOutput, jsonOutput, detectFileType(filename))
 	}
 }
 
-func printResult(filename string, longestFileName int, brief bool, mimeOutput bool, desc string) {
+func printResult(filename string, longestFileName int, brief bool, mimeOutput bool, jsonOutput bool, desc string) {
 	if desc == "" {
 		return
 	}
 	if mimeOutput {
 		desc = mimeForDescription(desc)
+	}
+	if jsonOutput {
+		emitJSON(filename, desc, mimeOutput, "")
+		return
 	}
 	if !brief {
 		fmt.Print(filename + ": ")
@@ -744,6 +751,37 @@ func printResult(filename string, longestFileName int, brief bool, mimeOutput bo
 		}
 	}
 	fmt.Println(desc)
+}
+
+type jsonLine struct {
+	Path  string `json:"path"`
+	Type  string `json:"type,omitempty"`
+	Mime  string `json:"mime,omitempty"`
+	Error string `json:"error,omitempty"`
+}
+
+func emitJSON(path string, desc string, mimeOutput bool, errMsg string) {
+	out := jsonLine{
+		Path:  path,
+		Type:  desc,
+		Error: errMsg,
+	}
+	if mimeOutput {
+		out.Mime = mimeForDescription(desc)
+	}
+	b, err := json.Marshal(out)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, path+": "+err.Error())
+		return
+	}
+	fmt.Println(string(b))
+}
+
+func emitError(path string, err error, jsonOutput bool) {
+	fmt.Fprintln(os.Stderr, path+": "+err.Error())
+	if jsonOutput {
+		emitJSON(path, "", false, err.Error())
+	}
 }
 
 func detectFileType(filename string) string {
