@@ -452,6 +452,13 @@ func detectTextSubtype(b []byte) string {
 		return "OpenVPN config"
 	}
 
+	if isINI, hasExtensions := looksLikeINI(top); isINI {
+		if hasExtensions {
+			return "Generic INItialization configuration [extensions]"
+		}
+		return "Generic INItialization configuration"
+	}
+
 	if strings.HasPrefix(top, "#!/bin/sh") || strings.HasPrefix(top, "#!/bin/bash") {
 		return "shell script"
 	}
@@ -625,6 +632,42 @@ func looksLikeBatch(s string) bool {
 		hits++
 	}
 	return hits >= 2
+}
+
+func looksLikeINI(s string) (bool, bool) {
+	lines := strings.Split(s, "\n")
+	sections := 0
+	keyvals := 0
+	hasExtensions := false
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, ";") || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		if strings.HasPrefix(line, "[") {
+			end := strings.Index(line, "]")
+			if end > 1 {
+				sections++
+				section := strings.TrimSpace(line[1:end])
+				if strings.EqualFold(section, "extensions") {
+					hasExtensions = true
+				}
+				continue
+			}
+		}
+
+		eq := strings.Index(line, "=")
+		if eq > 0 && eq < len(line)-1 {
+			key := strings.TrimSpace(line[:eq])
+			if key != "" {
+				keyvals++
+			}
+		}
+	}
+
+	return sections > 0 && keyvals > 0, hasExtensions
 }
 
 func doElf(contentByte []byte) string {
