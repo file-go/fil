@@ -128,15 +128,73 @@ var matcherM4a = fileMatcher{
 	},
 }
 
+var matcherQuickTime = fileMatcher{
+	name:   "quicktime",
+	minLen: 12,
+	match: func(b []byte, lenb int, magic int) bool {
+		return isQuickTimeLike(b)
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "QuickTime movie file"
+	},
+}
+
+var matcher3gpp = fileMatcher{
+	name:   "3gpp",
+	minLen: 12,
+	match: func(b []byte, lenb int, magic int) bool {
+		return is3gpLike(b)
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		if hasFtypBrand(b, "3g2") {
+			return "3GPP2 video file"
+		}
+		return "3GPP video file"
+	},
+}
+
+var matcherM4v = fileMatcher{
+	name:   "m4v",
+	minLen: 12,
+	match: func(b []byte, lenb int, magic int) bool {
+		return isM4vLike(b)
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "M4V video file"
+	},
+}
+
 var matcherMp4 = fileMatcher{
 	name:   "mp4",
-	minLen: 17,
+	minLen: 12,
 	match: func(b []byte, lenb int, magic int) bool {
-		return lenb > 16 &&
-			(HasPrefix(b, "\x00\x00\x00\x20\x66\x74\x79\x70") || HasPrefix(b, "\x00\x00\x00\x18\x66\x74\x79\x70") || HasPrefix(b, "\x00\x00\x00\x14\x66\x74\x79\x70"))
+		return isMp4Like(b)
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
 		return "MP4 video file"
+	},
+}
+
+var matcherMpegPs = fileMatcher{
+	name:   "mpeg-ps",
+	minLen: 4,
+	match: func(b []byte, lenb int, magic int) bool {
+		// MPEG Program Stream pack header (commonly .mpg/.mpeg/.vob).
+		return lenb >= 4 && HasPrefix(b, "\x00\x00\x01\xBA")
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "MPEG video file"
+	},
+}
+
+var matcherMpegTs = fileMatcher{
+	name:   "mpeg-ts",
+	minLen: 377,
+	match: func(b []byte, lenb int, magic int) bool {
+		return isMpegTsLike(b)
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "MPEG-TS video file"
 	},
 }
 
@@ -216,6 +274,17 @@ var matcherAvi = fileMatcher{
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
 		return "AVI file"
+	},
+}
+
+var matcherAsf = fileMatcher{
+	name:   "asf",
+	minLen: 16,
+	match: func(b []byte, lenb int, magic int) bool {
+		return lenb >= 16 && HasPrefix(b, "\x30\x26\xB2\x75\x8E\x66\xCF\x11\xA6\xD9\x00\xAA\x00\x62\xCE\x6C")
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "ASF media file"
 	},
 }
 

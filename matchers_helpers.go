@@ -65,6 +65,10 @@ func hasFtypBrand(b []byte, brands ...string) bool {
 	return false
 }
 
+func hasFtypBoxPrefix(b []byte) bool {
+	return len(b) >= 12 && bytes.Equal(b[4:8], []byte("ftyp"))
+}
+
 func isHeifFamily(b []byte) bool {
 	return hasFtypBrand(b, "heic", "heix", "hevc", "mif1")
 }
@@ -83,6 +87,36 @@ func isM4aLike(b []byte) bool {
 		}
 	}
 	return false
+}
+
+func isQuickTimeLike(b []byte) bool {
+	return hasFtypBrand(b, "qt  ")
+}
+
+func is3gpLike(b []byte) bool {
+	return hasFtypBrand(b, "3gp", "3g2")
+}
+
+func isM4vLike(b []byte) bool {
+	return hasFtypBrand(b, "M4V ")
+}
+
+func isMp4Like(b []byte) bool {
+	if !hasFtypBoxPrefix(b) {
+		return false
+	}
+	if isHeifFamily(b) || isM4aLike(b) || isQuickTimeLike(b) || is3gpLike(b) || isM4vLike(b) {
+		return false
+	}
+	return true
+}
+
+func isMpegTsLike(b []byte) bool {
+	// Standard TS (188-byte packets) and Blu-ray M2TS (192-byte packets).
+	if len(b) >= 377 && b[0] == 0x47 && b[188] == 0x47 && b[376] == 0x47 {
+		return true
+	}
+	return len(b) >= 389 && b[4] == 0x47 && b[196] == 0x47 && b[388] == 0x47
 }
 
 func oggSubtype(b []byte) string {

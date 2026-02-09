@@ -401,6 +401,22 @@ func mimeForDescription(desc string) string {
 		return "image/heif"
 	case strings.Contains(descLower, "m4a audio"):
 		return "audio/mp4"
+	case strings.Contains(descLower, "quicktime movie file"):
+		return "video/quicktime"
+	case strings.Contains(descLower, "3gpp2 video file"):
+		return "video/3gpp2"
+	case strings.Contains(descLower, "3gpp video file"):
+		return "video/3gpp"
+	case strings.Contains(descLower, "m4v video file"):
+		return "video/x-m4v"
+	case strings.Contains(descLower, "mp4 video file"):
+		return "video/mp4"
+	case strings.Contains(descLower, "mpeg video file"):
+		return "video/mpeg"
+	case strings.Contains(descLower, "mpeg-ts video file"):
+		return "video/mp2t"
+	case strings.Contains(descLower, "asf media file"):
+		return "video/x-ms-asf"
 	case strings.Contains(descLower, "ogg opus audio"),
 		strings.Contains(descLower, "ogg vorbis audio"),
 		strings.Contains(descLower, "ogg flac audio"),
