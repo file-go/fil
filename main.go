@@ -8,6 +8,7 @@ package main
 import (
 	"archive/tar"
 	"archive/zip"
+	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -15,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode/utf16"
 	"unicode/utf8"
 )
 
@@ -313,6 +315,10 @@ func mimeForDescription(desc string) string {
 		return "inode/directory"
 	case strings.HasPrefix(descLower, "symbolic link to "):
 		return "inode/symlink"
+	case strings.HasPrefix(descLower, "ascii text"),
+		strings.HasPrefix(descLower, "utf-8 text"),
+		strings.HasPrefix(descLower, "unicode text, utf-16"):
+		return "text/plain"
 	case descLower == "png image data":
 		return "image/png"
 	case descLower == "gif image data":
@@ -425,6 +431,14 @@ func isText(b []byte) bool {
 		return false
 	}
 
+	if _, _, ok := decodeUTF16Text(b); ok {
+		return true
+	}
+
+	return isUTF8LikeText(b)
+}
+
+func isUTF8LikeText(b []byte) bool {
 	badCtrl := 0
 	for _, c := range b {
 		if c == 0x00 {
@@ -455,6 +469,18 @@ func isASCIIOnly(b []byte) bool {
 }
 
 func describeText(b []byte) string {
+	if label, decoded, ok := decodeUTF16Text(b); ok {
+		base := "Unicode text, " + label + " text"
+		subtype := detectTextSubtype(decoded)
+		if subtype != "" {
+			base += ", " + subtype
+		}
+		if endings := detectLineEndings(decoded); endings != "" {
+			base += ", with " + endings + " line terminators"
+		}
+		return base
+	}
+
 	base := "UTF-8 text"
 	if isASCIIOnly(b) {
 		base = "ASCII text"
@@ -462,9 +488,150 @@ func describeText(b []byte) string {
 
 	subtype := detectTextSubtype(b)
 	if subtype != "" {
-		return base + ", " + subtype
+		base += ", " + subtype
+	}
+	if endings := detectLineEndings(b); endings != "" {
+		base += ", with " + endings + " line terminators"
 	}
 	return base
+}
+
+func decodeUTF16Text(b []byte) (string, []byte, bool) {
+	if len(b) < 4 {
+		return "", nil, false
+	}
+
+	if len(b) >= 2 && b[0] == 0xFF && b[1] == 0xFE {
+		decoded, ok := decodeUTF16Bytes(b[2:], true)
+		if ok {
+			return "UTF-16, little-endian", decoded, true
+		}
+		return "", nil, false
+	}
+	if len(b) >= 2 && b[0] == 0xFE && b[1] == 0xFF {
+		decoded, ok := decodeUTF16Bytes(b[2:], false)
+		if ok {
+			return "UTF-16, big-endian", decoded, true
+		}
+		return "", nil, false
+	}
+
+	switch utf16EndiannessHeuristic(b) {
+	case "le":
+		decoded, ok := decodeUTF16Bytes(b, true)
+		if ok {
+			return "UTF-16, little-endian", decoded, true
+		}
+	case "be":
+		decoded, ok := decodeUTF16Bytes(b, false)
+		if ok {
+			return "UTF-16, big-endian", decoded, true
+		}
+	}
+
+	return "", nil, false
+}
+
+func decodeUTF16Bytes(b []byte, littleEndian bool) ([]byte, bool) {
+	n := len(b)
+	if n < 2 {
+		return nil, false
+	}
+	if n%2 != 0 {
+		n--
+	}
+	if n < 2 {
+		return nil, false
+	}
+
+	u16s := make([]uint16, 0, n/2)
+	for i := 0; i+1 < n; i += 2 {
+		var v uint16
+		if littleEndian {
+			v = uint16(b[i]) | uint16(b[i+1])<<8
+		} else {
+			v = uint16(b[i])<<8 | uint16(b[i+1])
+		}
+		u16s = append(u16s, v)
+	}
+
+	runes := utf16.Decode(u16s)
+	if len(runes) == 0 {
+		return nil, false
+	}
+	text := string(runes)
+	if len(text) == 0 || !isUTF8LikeText([]byte(text)) {
+		return nil, false
+	}
+	return []byte(text), true
+}
+
+func utf16EndiannessHeuristic(b []byte) string {
+	end := len(b)
+	if end > 4096 {
+		end = 4096
+	}
+	if end%2 != 0 {
+		end--
+	}
+	if end < 8 {
+		return ""
+	}
+
+	pairs := end / 2
+	oddZero := 0
+	evenZero := 0
+	lePrintable := 0
+	bePrintable := 0
+
+	for i := 0; i < end; i += 2 {
+		lo := b[i]
+		hi := b[i+1]
+		if hi == 0 {
+			oddZero++
+			if isLikelyTextByte(lo) {
+				lePrintable++
+			}
+		}
+		if lo == 0 {
+			evenZero++
+			if isLikelyTextByte(hi) {
+				bePrintable++
+			}
+		}
+	}
+
+	if oddZero*100/pairs >= 55 && lePrintable*100/pairs >= 50 {
+		return "le"
+	}
+	if evenZero*100/pairs >= 55 && bePrintable*100/pairs >= 50 {
+		return "be"
+	}
+	return ""
+}
+
+func isLikelyTextByte(c byte) bool {
+	return c == '\n' || c == '\r' || c == '\t' || (c >= 0x20 && c <= 0x7E)
+}
+
+func detectLineEndings(b []byte) string {
+	hasCRLF := bytes.Contains(b, []byte("\r\n"))
+	withoutCRLF := bytes.ReplaceAll(b, []byte("\r\n"), []byte{})
+	hasLF := bytes.Contains(withoutCRLF, []byte("\n"))
+	hasCR := bytes.Contains(withoutCRLF, []byte("\r"))
+
+	switch {
+	case hasCRLF && !hasLF && !hasCR:
+		return "CRLF"
+	case !hasCRLF && hasLF && !hasCR:
+		return "LF"
+	case !hasCRLF && !hasLF && hasCR:
+		return "CR"
+	case hasCRLF || hasLF || hasCR:
+		return "mixed"
+	default:
+		return ""
+	}
 }
 
 var elfArchByID = map[int]string{
