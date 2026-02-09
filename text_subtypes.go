@@ -325,15 +325,24 @@ func looksLikeYAML(s string) bool {
 	lines := strings.Split(s, "\n")
 	keyValLines := 0
 	startMarker := false
+	firstNonEmptySeen := false
+	nonEmpty := 0
 
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
+		nonEmpty++
 		if line == "---" {
-			startMarker = true
+			if !firstNonEmptySeen {
+				startMarker = true
+			}
+			firstNonEmptySeen = true
 			continue
+		}
+		if !firstNonEmptySeen {
+			firstNonEmptySeen = true
 		}
 		if strings.HasPrefix(line, "- ") {
 			continue
@@ -348,16 +357,22 @@ func looksLikeYAML(s string) bool {
 			continue
 		}
 		key := strings.TrimSpace(line[:colon])
-		if key == "" {
+		value := strings.TrimSpace(line[colon+1:])
+		if key == "" || value == "" || !isLikelyYAMLKey(key) {
 			continue
 		}
 		keyValLines++
 	}
 
-	if startMarker && keyValLines >= 1 {
+	if nonEmpty == 0 {
+		return false
+	}
+	keyRatio := float64(keyValLines) / float64(nonEmpty)
+
+	if startMarker && keyValLines >= 1 && keyRatio >= 0.2 {
 		return true
 	}
-	return keyValLines >= 2
+	return keyValLines >= 3 && keyRatio >= 0.6
 }
 
 func detectDelimitedSubtype(s string) string {
@@ -384,21 +399,22 @@ func scoreDelimited(s string, delim rune) float64 {
 	lines := strings.Split(s, "\n")
 	validRows := make([][]string, 0, 64)
 	fieldCountHits := make(map[int]int)
-	delimiterLines := 0
+	candidateLines := 0
+	structuredLines := 0
 	maxLines := 60
 
 	for _, line := range lines {
-		if len(validRows) >= maxLines {
-			break
-		}
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "//") {
 			continue
 		}
+		candidateLines++
+		if candidateLines > maxLines {
+			break
+		}
 		if !strings.ContainsRune(line, delim) {
 			continue
 		}
-		delimiterLines++
 
 		r := csv.NewReader(strings.NewReader(line))
 		r.Comma = delim
@@ -410,6 +426,10 @@ func scoreDelimited(s string, delim rune) float64 {
 			continue
 		}
 		fields = trimTrailingEmptyFields(fields)
+		if len(fields) < 2 {
+			continue
+		}
+		structuredLines++
 		if len(fields) < 3 {
 			continue
 		}
@@ -419,7 +439,17 @@ func scoreDelimited(s string, delim rune) float64 {
 	}
 
 	valid := len(validRows)
-	if valid < 4 || delimiterLines < 4 {
+	if candidateLines < 4 || structuredLines < 4 || valid < 4 {
+		return 0
+	}
+
+	// Avoid classifying prose with occasional commas/tabs as delimited text.
+	structuredCoverage := float64(structuredLines) / float64(candidateLines)
+	if structuredCoverage < 0.75 {
+		return 0
+	}
+	modeEligibleCoverage := float64(valid) / float64(structuredLines)
+	if modeEligibleCoverage < 0.7 {
 		return 0
 	}
 
@@ -533,6 +563,34 @@ func hasLetter(s string) bool {
 		}
 	}
 	return false
+}
+
+func isLikelyYAMLKey(key string) bool {
+	key = strings.TrimSpace(key)
+	if key == "" || len(key) > 64 {
+		return false
+	}
+	if strings.ContainsAny(key, "{}[];,") || strings.HasPrefix(key, "-") {
+		return false
+	}
+
+	words := strings.Fields(key)
+	if len(words) > 3 {
+		return false
+	}
+
+	for _, r := range key {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+			continue
+		}
+		switch r {
+		case '_', '-', '.', ' ':
+			continue
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 func looksLikeMarkdown(s string) bool {
