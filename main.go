@@ -319,6 +319,7 @@ func mimeForDescription(desc string) string {
 		return "text/markdown"
 	case strings.HasPrefix(descLower, "ascii text"),
 		strings.HasPrefix(descLower, "utf-8 text"),
+		strings.HasPrefix(descLower, "non-utf text"),
 		strings.HasPrefix(descLower, "unicode text, utf-16"):
 		return "text/plain"
 	case descLower == "png image data":
@@ -501,7 +502,32 @@ func isText(b []byte) bool {
 		return true
 	}
 
+	// Some Windows batch files are saved in legacy 8-bit encodings (for example
+	// cp1252 smart punctuation), so they fail strict UTF-8 validation despite
+	// being clearly text.
+	if looksLikeLegacyBatchText(b) {
+		return true
+	}
+
 	return isUTF8LikeText(b)
+}
+
+func looksLikeLegacyBatchText(b []byte) bool {
+	if len(b) == 0 || utf8.Valid(b) {
+		return false
+	}
+	if bytes.IndexByte(b, 0x00) >= 0 {
+		return false
+	}
+
+	const maxScan = 32 * 1024
+	end := len(b)
+	if end > maxScan {
+		end = maxScan
+	}
+
+	topLower := "\n" + strings.ToLower(string(b[:end]))
+	return looksLikeBatch(topLower)
 }
 
 func isUTF8LikeText(b []byte) bool {
@@ -550,6 +576,8 @@ func describeText(b []byte) string {
 	base := "UTF-8 text"
 	if isASCIIOnly(b) {
 		base = "ASCII text"
+	} else if !utf8.Valid(b) {
+		base = "Non-UTF text"
 	}
 
 	subtype := detectTextSubtype(b)
