@@ -39,6 +39,154 @@ var matcherJpeg = fileMatcher{
 	},
 }
 
+var matcherDds = fileMatcher{
+	name:   "dds",
+	minLen: 4,
+	match: func(b []byte, lenb int, magic int) bool {
+		return lenb >= 4 && HasPrefix(b, "DDS ")
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "DDS image data"
+	},
+}
+
+var matcherExr = fileMatcher{
+	name:   "exr",
+	minLen: 4,
+	match: func(b []byte, lenb int, magic int) bool {
+		return lenb >= 4 && HasPrefix(b, "\x76\x2F\x31\x01")
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "OpenEXR image data"
+	},
+}
+
+var matcherHdr = fileMatcher{
+	name:   "hdr",
+	minLen: 6,
+	match: func(b []byte, lenb int, magic int) bool {
+		return lenb >= 6 && (HasPrefix(b, "#?RADIANCE") || HasPrefix(b, "#?RGBE"))
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "Radiance HDR image data"
+	},
+}
+
+var matcherIcns = fileMatcher{
+	name:   "icns",
+	minLen: 8,
+	match: func(b []byte, lenb int, magic int) bool {
+		return lenb >= 8 && HasPrefix(b, "icns")
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "Apple icon image"
+	},
+}
+
+var matcherTga = fileMatcher{
+	name:   "tga",
+	minLen: 18,
+	match: func(b []byte, lenb int, magic int) bool {
+		footer := []byte("TRUEVISION-XFILE.\x00")
+		if lenb >= 26 && bytes.HasSuffix(b, footer) {
+			return true
+		}
+		tail, ok := readTail(18)
+		return ok && bytes.Equal(tail, footer)
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "Targa image data"
+	},
+}
+
+var matcherCr2 = fileMatcher{
+	name:   "cr2",
+	minLen: 12,
+	match: func(b []byte, lenb int, magic int) bool {
+		return lenb >= 12 && isTiffLike(b) && Equal(b[8:10], "CR")
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "Canon CR2 raw image data"
+	},
+}
+
+var matcherNef = fileMatcher{
+	name:   "nef",
+	minLen: 12,
+	match: func(b []byte, lenb int, magic int) bool {
+		return isTiffLike(b) && sampleContains(b, "Nikon", 8192)
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "Nikon NEF raw image data"
+	},
+}
+
+var matcherArw = fileMatcher{
+	name:   "arw",
+	minLen: 12,
+	match: func(b []byte, lenb int, magic int) bool {
+		return isTiffLike(b) && sampleContains(b, "SONY", 8192)
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "Sony ARW raw image data"
+	},
+}
+
+var matcherRaf = fileMatcher{
+	name:   "raf",
+	minLen: 15,
+	match: func(b []byte, lenb int, magic int) bool {
+		return lenb >= 15 && HasPrefix(b, "FUJIFILMCCD-RAW")
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "Fuji RAF raw image data"
+	},
+}
+
+var matcherOrf = fileMatcher{
+	name:   "orf",
+	minLen: 4,
+	match: func(b []byte, lenb int, magic int) bool {
+		return lenb >= 4 && (HasPrefix(b, "\x49\x49\x52\x4F") || HasPrefix(b, "\x4D\x4D\x4F\x52"))
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "Olympus ORF raw image data"
+	},
+}
+
+var matcherRw2 = fileMatcher{
+	name:   "rw2",
+	minLen: 4,
+	match: func(b []byte, lenb int, magic int) bool {
+		return lenb >= 4 && (HasPrefix(b, "\x49\x49\x55\x00") || HasPrefix(b, "\x4D\x4D\x00\x55"))
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "Panasonic RW2 raw image data"
+	},
+}
+
+var matcherDng = fileMatcher{
+	name:   "dng",
+	minLen: 12,
+	match: func(b []byte, lenb int, magic int) bool {
+		return isTiffLike(b) && sampleContains(b, "DNGVersion", 8192)
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "Adobe DNG raw image data"
+	},
+}
+
+var matcherCr3 = fileMatcher{
+	name:   "cr3",
+	minLen: 12,
+	match: func(b []byte, lenb int, magic int) bool {
+		return isCr3Like(b)
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "Canon CR3 raw image data"
+	},
+}
+
 var matcherFlv = fileMatcher{
 	name:   "flv",
 	minLen: 3,
@@ -114,6 +262,49 @@ var matcherHeif = fileMatcher{
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
 		return "HEIF image"
+	},
+}
+
+var matcherAvif = fileMatcher{
+	name:   "avif",
+	minLen: 12,
+	match: func(b []byte, lenb int, magic int) bool {
+		return isAvifLike(b)
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "AVIF image"
+	},
+}
+
+var matcherJxl = fileMatcher{
+	name:   "jxl",
+	minLen: 2,
+	match: func(b []byte, lenb int, magic int) bool {
+		// JPEG XL codestream signature.
+		if lenb >= 2 && HasPrefix(b, "\xFF\x0A") {
+			return true
+		}
+		// JPEG XL container signature.
+		return lenb >= 12 && HasPrefix(b, "\x00\x00\x00\x0C\x4A\x58\x4C\x20\x0D\x0A\x87\x0A")
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "JPEG XL image data"
+	},
+}
+
+var matcherJpeg2000 = fileMatcher{
+	name:   "jpeg2000",
+	minLen: 4,
+	match: func(b []byte, lenb int, magic int) bool {
+		// JPEG 2000 codestream signature.
+		if lenb >= 4 && HasPrefix(b, "\xFF\x4F\xFF\x51") {
+			return true
+		}
+		// JP2 signature box.
+		return lenb >= 12 && HasPrefix(b, "\x00\x00\x00\x0C\x6A\x50\x20\x20\x0D\x0A\x87\x0A")
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "JPEG 2000 image data"
 	},
 }
 

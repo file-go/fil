@@ -45,6 +45,18 @@ func hasArrowFooter() bool {
 	return bytes.Equal(buf, []byte("ARROW1"))
 }
 
+func isTiffLike(b []byte) bool {
+	return len(b) >= 4 && (bytes.HasPrefix(b, []byte{0x49, 0x49, 0x2A, 0x00}) || bytes.HasPrefix(b, []byte{0x4D, 0x4D, 0x00, 0x2A}))
+}
+
+func sampleContains(b []byte, needle string, max int) bool {
+	end := len(b)
+	if end > max {
+		end = max
+	}
+	return bytes.Contains(b[:end], []byte(needle))
+}
+
 func hasFtypBrand(b []byte, brands ...string) bool {
 	if len(b) < 12 {
 		return false
@@ -70,7 +82,15 @@ func hasFtypBoxPrefix(b []byte) bool {
 }
 
 func isHeifFamily(b []byte) bool {
+	// AVIF can also carry the "mif1" compatible brand, so exclude it here.
+	if isAvifLike(b) {
+		return false
+	}
 	return hasFtypBrand(b, "heic", "heix", "hevc", "mif1")
+}
+
+func isAvifLike(b []byte) bool {
+	return hasFtypBrand(b, "avif", "avis")
 }
 
 func isM4aLike(b []byte) bool {
@@ -101,11 +121,15 @@ func isM4vLike(b []byte) bool {
 	return hasFtypBrand(b, "M4V ")
 }
 
+func isCr3Like(b []byte) bool {
+	return hasFtypBrand(b, "crx ")
+}
+
 func isMp4Like(b []byte) bool {
 	if !hasFtypBoxPrefix(b) {
 		return false
 	}
-	if isHeifFamily(b) || isM4aLike(b) || isQuickTimeLike(b) || is3gpLike(b) || isM4vLike(b) {
+	if isHeifFamily(b) || isM4aLike(b) || isQuickTimeLike(b) || is3gpLike(b) || isM4vLike(b) || isCr3Like(b) {
 		return false
 	}
 	return true

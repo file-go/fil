@@ -325,6 +325,28 @@ func mimeForDescription(desc string) string {
 		return "image/gif"
 	case strings.HasPrefix(descLower, "jpeg / jpg image data"):
 		return "image/jpeg"
+	case descLower == "dds image data":
+		return "image/vnd-ms.dds"
+	case descLower == "openexr image data":
+		return "image/x-exr"
+	case descLower == "radiance hdr image data":
+		return "image/vnd.radiance"
+	case descLower == "apple icon image":
+		return "image/icns"
+	case descLower == "targa image data":
+		return "image/x-tga"
+	case descLower == "bmp image":
+		return "image/bmp"
+	case descLower == "tiff image data":
+		return "image/tiff"
+	case descLower == "google webp file":
+		return "image/webp"
+	case descLower == "svg scalable vector graphics image":
+		return "image/svg+xml"
+	case descLower == "ms windows icon resource":
+		return "image/x-icon"
+	case descLower == "photoshop document":
+		return "image/vnd.adobe.photoshop"
 	case descLower == "pdf image":
 		return "application/pdf"
 	case strings.Contains(descLower, "zip archive"):
@@ -399,6 +421,28 @@ func mimeForDescription(desc string) string {
 		return "application/x-apple-diskimage"
 	case strings.Contains(descLower, "heif image"):
 		return "image/heif"
+	case strings.Contains(descLower, "avif image"):
+		return "image/avif"
+	case strings.Contains(descLower, "jpeg xl image data"):
+		return "image/jxl"
+	case strings.Contains(descLower, "jpeg 2000 image data"):
+		return "image/jp2"
+	case strings.Contains(descLower, "adobe dng raw image data"):
+		return "image/x-adobe-dng"
+	case strings.Contains(descLower, "canon cr2 raw image data"):
+		return "image/x-canon-cr2"
+	case strings.Contains(descLower, "canon cr3 raw image data"):
+		return "image/x-canon-cr3"
+	case strings.Contains(descLower, "nikon nef raw image data"):
+		return "image/x-nikon-nef"
+	case strings.Contains(descLower, "sony arw raw image data"):
+		return "image/x-sony-arw"
+	case strings.Contains(descLower, "fuji raf raw image data"):
+		return "image/x-fuji-raf"
+	case strings.Contains(descLower, "olympus orf raw image data"):
+		return "image/x-olympus-orf"
+	case strings.Contains(descLower, "panasonic rw2 raw image data"):
+		return "image/x-panasonic-rw2"
 	case strings.Contains(descLower, "m4a audio"):
 		return "audio/mp4"
 	case strings.Contains(descLower, "quicktime movie file"):
