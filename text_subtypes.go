@@ -236,26 +236,62 @@ func looksLikePerl(s string) bool {
 }
 
 func looksLikeBatch(s string) bool {
-	hits := 0
-	if strings.Contains(s, "\n@echo off") {
-		hits++
+	lines := strings.Split(s, "\n")
+	commandHits := 0
+	varHits := 0
+	hasEchoOff := false
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		if strings.HasPrefix(line, "@") {
+			line = strings.TrimSpace(line[1:])
+		}
+		if line == "" {
+			continue
+		}
+
+		switch {
+		case line == "echo off":
+			hasEchoOff = true
+			commandHits += 2
+		case strings.HasPrefix(line, "echo "):
+			commandHits++
+		case line == "rem" || strings.HasPrefix(line, "rem ") || strings.HasPrefix(line, "::"):
+			commandHits++
+		case strings.HasPrefix(line, "setlocal"), strings.HasPrefix(line, "endlocal"):
+			commandHits++
+		case strings.HasPrefix(line, "if exist "), strings.HasPrefix(line, "if not exist "):
+			commandHits++
+		case strings.HasPrefix(line, "goto "), strings.HasPrefix(line, "call "):
+			commandHits++
+		case strings.HasPrefix(line, "for "), strings.HasPrefix(line, "shift"):
+			commandHits++
+		case strings.HasPrefix(line, ":"):
+			// Label target, common in batch control flow.
+			commandHits++
+		}
+
+		if strings.Contains(line, "%0") ||
+			strings.Contains(line, "%1") ||
+			strings.Contains(line, "%2") ||
+			strings.Contains(line, "%~") ||
+			strings.Contains(line, "%%") ||
+			strings.Count(line, "!") >= 2 {
+			varHits++
+		}
 	}
-	if strings.Contains(s, "\nsetlocal") || strings.Contains(s, "\nendlocal") {
-		hits++
+
+	if hasEchoOff && (commandHits >= 3 || varHits > 0) {
+		return true
 	}
-	if strings.Contains(s, "\nif exist ") || strings.Contains(s, "\nif not exist ") {
-		hits++
+	if commandHits >= 3 && varHits > 0 {
+		return true
 	}
-	if strings.Contains(s, "\ngoto ") || strings.Contains(s, "\ncall ") {
-		hits++
-	}
-	if strings.Contains(s, "\n%") {
-		hits++
-	}
-	if strings.Contains(s, "\nrem ") || strings.Contains(s, "\n::") {
-		hits++
-	}
-	return hits >= 2
+	return commandHits >= 5
 }
 
 func looksLikeINI(s string) (bool, bool) {
