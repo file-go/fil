@@ -419,6 +419,8 @@ func mimeForDescription(desc string) string {
 		return "message/rfc822"
 	case strings.Contains(descLower, "openvpn configuration"):
 		return "application/x-openvpn-profile"
+	case strings.Contains(descLower, "kml geospatial data"):
+		return "application/vnd.google-earth.kml+xml"
 	case strings.Contains(descLower, "apple udif disk image"):
 		return "application/x-apple-diskimage"
 	case strings.Contains(descLower, "heif image"):

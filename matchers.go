@@ -101,6 +101,7 @@ var matchers = []fileMatcher{
 	matcherRtf,
 	matcherHtml,
 	matcherSvg,
+	matcherKml,
 	matcherXml,
 	matcherJSON,
 	matcherText,

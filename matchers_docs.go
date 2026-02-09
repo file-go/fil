@@ -95,6 +95,17 @@ var matcherXml = fileMatcher{
 	},
 }
 
+var matcherKml = fileMatcher{
+	name:   "kml",
+	minLen: 12,
+	match: func(b []byte, lenb int, magic int) bool {
+		return looksLikeKMLDocument(b)
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "KML geospatial data"
+	},
+}
+
 var matcherSvg = fileMatcher{
 	name:   "svg",
 	minLen: 5,
@@ -166,6 +177,36 @@ func looksLikeHTMLDocument(b []byte) bool {
 	}
 
 	return false
+}
+
+func looksLikeKMLDocument(b []byte) bool {
+	if len(b) < 12 {
+		return false
+	}
+
+	end := len(b)
+	if end > 8192 {
+		end = 8192
+	}
+	sample := bytes.TrimSpace(b[:end])
+	if len(sample) == 0 {
+		return false
+	}
+
+	utf8Lower := bytes.ToLower(stripUTF8BOM(sample))
+	if hasKMLMarkers(utf8Lower) {
+		return true
+	}
+
+	if utf16Decoded, ok := decodeUTF16ToASCII(sample); ok {
+		return hasKMLMarkers(bytes.ToLower(bytes.TrimSpace(utf16Decoded)))
+	}
+
+	return false
+}
+
+func hasKMLMarkers(s []byte) bool {
+	return bytes.Contains(s, []byte("<kml")) && bytes.Contains(s, []byte("xmlns="))
 }
 
 func hasHTMLMarkers(s []byte) bool {
