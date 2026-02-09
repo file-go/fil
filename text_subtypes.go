@@ -367,7 +367,11 @@ func scoreDelimited(s string, delim rune) float64 {
 		r.LazyQuotes = true
 		r.TrimLeadingSpace = true
 		fields, err := r.Read()
-		if err != nil || len(fields) < 2 {
+		if err != nil {
+			continue
+		}
+		fields = trimTrailingEmptyFields(fields)
+		if len(fields) < 3 {
 			continue
 		}
 
@@ -393,7 +397,14 @@ func scoreDelimited(s string, delim rune) float64 {
 		return 0
 	}
 
-	consistency := float64(modeCount) / float64(valid)
+	nearModeCount := 0
+	for fieldCount, count := range fieldCountHits {
+		if fieldCount >= modeFields-1 && fieldCount <= modeFields+1 {
+			nearModeCount += count
+		}
+	}
+
+	consistency := float64(nearModeCount) / float64(valid)
 	if consistency < 0.85 {
 		return 0
 	}
@@ -418,6 +429,17 @@ func scoreDelimited(s string, delim rune) float64 {
 		score += 0.35
 	}
 	return score
+}
+
+func trimTrailingEmptyFields(fields []string) []string {
+	end := len(fields)
+	for end > 0 {
+		if strings.TrimSpace(fields[end-1]) != "" {
+			break
+		}
+		end--
+	}
+	return fields[:end]
 }
 
 func isMostlyTextRow(fields []string) bool {
