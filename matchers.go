@@ -41,6 +41,7 @@ var matchers = []fileMatcher{
 	matcherPgCustomDump,
 	matcherPem,
 	matcherPe,
+	matcherDosMbrBootSector,
 	matcherIso9660,
 	matcherBmp,
 	matcherPdf,

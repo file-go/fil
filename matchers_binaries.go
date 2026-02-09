@@ -101,3 +101,76 @@ var matcherIso9660 = fileMatcher{
 		return "ISO 9660 CD-ROM filesystem"
 	},
 }
+
+var matcherDosMbrBootSector = fileMatcher{
+	name:   "dos-mbr-boot-sector",
+	minLen: 512,
+	match: func(b []byte, lenb int, magic int) bool {
+		return isDosMbrBootSector(b)
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "DOS/MBR boot sector"
+	},
+}
+
+func isDosMbrBootSector(b []byte) bool {
+	if len(b) < 512 || b[510] != 0x55 || b[511] != 0xAA {
+		return false
+	}
+	return looksLikeFatBootSector(b) || hasLikelyMbrPartitionTable(b)
+}
+
+func looksLikeFatBootSector(b []byte) bool {
+	if len(b) < 64 {
+		return false
+	}
+
+	hasJump := (b[0] == 0xEB && b[2] == 0x90) || b[0] == 0xE9
+	if !hasJump {
+		return false
+	}
+
+	bytesPerSector := peekLe(b[11:], 2)
+	switch bytesPerSector {
+	case 512, 1024, 2048, 4096:
+	default:
+		return false
+	}
+
+	spc := b[13]
+	if spc == 0 || (spc&(spc-1)) != 0 {
+		return false
+	}
+
+	reserved := peekLe(b[14:], 2)
+	if reserved <= 0 {
+		return false
+	}
+
+	numFATs := b[16]
+	if numFATs == 0 || numFATs > 4 {
+		return false
+	}
+
+	return true
+}
+
+func hasLikelyMbrPartitionTable(b []byte) bool {
+	if len(b) < 512 {
+		return false
+	}
+
+	nonEmpty := false
+	for i := 0; i < 4; i++ {
+		off := 446 + i*16
+		status := b[off]
+		if status != 0x00 && status != 0x80 {
+			return false
+		}
+		if b[off+4] != 0x00 {
+			nonEmpty = true
+		}
+	}
+
+	return nonEmpty
+}
