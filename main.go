@@ -315,6 +315,8 @@ func mimeForDescription(desc string) string {
 		return "inode/directory"
 	case strings.HasPrefix(descLower, "symbolic link to "):
 		return "inode/symlink"
+	case strings.Contains(descLower, "markdown text"):
+		return "text/markdown"
 	case strings.HasPrefix(descLower, "ascii text"),
 		strings.HasPrefix(descLower, "utf-8 text"),
 		strings.HasPrefix(descLower, "unicode text, utf-16"):

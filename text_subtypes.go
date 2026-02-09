@@ -76,6 +76,10 @@ func detectTextSubtype(b []byte) string {
 		return delimited
 	}
 
+	if looksLikeMarkdown(top) {
+		return "Markdown text"
+	}
+
 	if looksLikeYAML(top) {
 		return "YAML"
 	}
@@ -529,4 +533,156 @@ func hasLetter(s string) bool {
 		}
 	}
 	return false
+}
+
+func looksLikeMarkdown(s string) bool {
+	lines := strings.Split(s, "\n")
+	const maxLines = 200
+	if len(lines) > maxLines {
+		lines = lines[:maxLines]
+	}
+
+	typeMask := 0
+	score := 0
+	nonEmpty := 0
+
+	for i := 0; i < len(lines); i++ {
+		line := strings.TrimSpace(lines[i])
+		if line == "" {
+			continue
+		}
+		nonEmpty++
+
+		// ATX headings: #, ##, ### ...
+		if isMarkdownHeading(line) {
+			score += 3
+			typeMask |= 1 << 0
+			continue
+		}
+
+		// Setext headings: text followed by ==== or ----
+		if i+1 < len(lines) && isSetextUnderline(strings.TrimSpace(lines[i+1])) && !strings.HasPrefix(line, "#") {
+			score += 3
+			typeMask |= 1 << 1
+			continue
+		}
+
+		// Fenced code block markers.
+		if strings.HasPrefix(line, "```") || strings.HasPrefix(line, "~~~") {
+			score += 3
+			typeMask |= 1 << 2
+		}
+
+		// List markers.
+		if isMarkdownListItem(line) {
+			score++
+			typeMask |= 1 << 3
+		}
+
+		// Blockquote marker.
+		if strings.HasPrefix(line, "> ") || strings.HasPrefix(line, ">\t") {
+			score++
+			typeMask |= 1 << 4
+		}
+
+		// Links / reference links.
+		if hasMarkdownLink(line) {
+			score += 2
+			typeMask |= 1 << 5
+		}
+
+		// Inline markdown emphasis / code.
+		if hasMarkdownInlineMarkup(line) {
+			score++
+			typeMask |= 1 << 6
+		}
+	}
+
+	if nonEmpty < 3 {
+		return false
+	}
+
+	kinds := bitCount(typeMask)
+	if kinds < 2 {
+		return false
+	}
+
+	// Keep this conservative to avoid classifying plain prose as markdown.
+	return score >= 5
+}
+
+func isMarkdownHeading(line string) bool {
+	if len(line) < 2 || line[0] != '#' {
+		return false
+	}
+	i := 0
+	for i < len(line) && line[i] == '#' {
+		i++
+	}
+	return i >= 1 && i <= 6 && i < len(line) && line[i] == ' '
+}
+
+func isSetextUnderline(line string) bool {
+	if len(line) < 3 {
+		return false
+	}
+	allEq := true
+	allDash := true
+	for i := 0; i < len(line); i++ {
+		switch line[i] {
+		case '=':
+			allDash = false
+		case '-':
+			allEq = false
+		default:
+			return false
+		}
+	}
+	return allEq || allDash
+}
+
+func isMarkdownListItem(line string) bool {
+	if strings.HasPrefix(line, "- ") || strings.HasPrefix(line, "* ") || strings.HasPrefix(line, "+ ") {
+		return true
+	}
+	j := 0
+	for j < len(line) && line[j] >= '0' && line[j] <= '9' {
+		j++
+	}
+	return j > 0 && j+1 < len(line) && line[j] == '.' && line[j+1] == ' '
+}
+
+func hasMarkdownLink(line string) bool {
+	if strings.Contains(line, "][") && strings.Contains(line, "]:") {
+		return true
+	}
+	lb := strings.Index(line, "[")
+	if lb < 0 {
+		return false
+	}
+	rb := strings.Index(line[lb+1:], "]")
+	if rb < 0 {
+		return false
+	}
+	rest := line[lb+1+rb+1:]
+	return strings.HasPrefix(rest, "(") && strings.Contains(rest, ")")
+}
+
+func hasMarkdownInlineMarkup(line string) bool {
+	if strings.Count(line, "`") >= 2 {
+		return true
+	}
+	if strings.Count(line, "**") >= 1 || strings.Count(line, "__") >= 1 {
+		return true
+	}
+	return strings.Count(line, "*") >= 2 || strings.Count(line, "_") >= 2
+}
+
+func bitCount(v int) int {
+	count := 0
+	for v != 0 {
+		v &= v - 1
+		count++
+	}
+	return count
 }
