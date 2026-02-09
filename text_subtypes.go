@@ -169,22 +169,30 @@ func looksLikeTypeScript(s string) bool {
 
 func looksLikePython(s string) bool {
 	hits := 0
-	if strings.Contains(s, "\ndef ") {
+	if strings.Count(s, "\ndef ") > 0 {
 		hits++
 	}
-	if strings.Contains(s, "\nclass ") {
+	if strings.Count(s, "\nclass ") > 0 {
 		hits++
 	}
-	if strings.Contains(s, "\nfrom ") && strings.Contains(s, " import ") {
+	if strings.Count(s, "\nfrom ") > 0 && strings.Contains(s, " import ") {
 		hits++
 	}
-	if strings.Contains(s, "\nimport ") {
-		hits++
+	if importCount := strings.Count(s, "\nimport "); importCount > 0 {
+		// Multiple import statements are a strong Python signal.
+		hits += minInt(importCount, 2)
 	}
 	if strings.Contains(s, "\nif __name__ == \"__main__\":") || strings.Contains(s, "\nif __name__ == '__main__':") {
 		hits++
 	}
 	return hits >= 2
+}
+
+func minInt(a int, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func looksLikePowerShell(s string) bool {
