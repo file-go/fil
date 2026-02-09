@@ -32,10 +32,6 @@ func detectTextSubtype(b []byte) string {
 		return "Generic INItialization configuration"
 	}
 
-	if delimited := detectDelimitedSubtype(top); delimited != "" {
-		return delimited
-	}
-
 	if strings.HasPrefix(top, "#!/bin/sh") || strings.HasPrefix(top, "#!/bin/bash") || strings.HasPrefix(top, "#!/usr/bin/env sh") {
 		return "shell script"
 	}
@@ -48,7 +44,7 @@ func detectTextSubtype(b []byte) string {
 		return "Python script"
 	}
 
-	if strings.Contains(topLower, "\n#requires") || strings.Contains(topLower, "\nparam(") || strings.Contains(topLower, "$psversiontable") {
+	if strings.Contains(topLower, "\n#requires") || strings.Contains(topLower, "\nparam(") || strings.Contains(topLower, "\nparam\n(") || strings.Contains(topLower, "$psversiontable") {
 		return "PowerShell script"
 	}
 
@@ -74,6 +70,10 @@ func detectTextSubtype(b []byte) string {
 
 	if looksLikeJavaScript(topLower) {
 		return "JavaScript"
+	}
+
+	if delimited := detectDelimitedSubtype(top); delimited != "" {
+		return delimited
 	}
 
 	if looksLikeYAML(top) {
@@ -260,9 +260,12 @@ func looksLikeINI(s string) (bool, bool) {
 
 		if strings.HasPrefix(line, "[") {
 			end := strings.Index(line, "]")
-			if end > 1 {
-				sections++
+			if end > 1 && isValidINISectionLine(line, end) {
 				section := strings.TrimSpace(line[1:end])
+				if !isLikelyINISectionName(section) {
+					continue
+				}
+				sections++
 				if strings.EqualFold(section, "extensions") {
 					hasExtensions = true
 				}
@@ -273,13 +276,45 @@ func looksLikeINI(s string) (bool, bool) {
 		eq := strings.Index(line, "=")
 		if eq > 0 && eq < len(line)-1 {
 			key := strings.TrimSpace(line[:eq])
-			if key != "" {
+			if isLikelyINIKeyName(key) {
 				keyvals++
 			}
 		}
 	}
 
 	return sections > 0 && keyvals > 0, hasExtensions
+}
+
+func isValidINISectionLine(line string, closingBracket int) bool {
+	rest := strings.TrimSpace(line[closingBracket+1:])
+	return rest == "" || strings.HasPrefix(rest, ";") || strings.HasPrefix(rest, "#")
+}
+
+func isLikelyINISectionName(name string) bool {
+	return isLikelyINIIdentifier(name)
+}
+
+func isLikelyINIKeyName(name string) bool {
+	return isLikelyINIIdentifier(name)
+}
+
+func isLikelyINIIdentifier(s string) bool {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+			continue
+		}
+		switch r {
+		case '_', '-', '.', ' ', ':':
+			continue
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 func looksLikeYAML(s string) bool {
