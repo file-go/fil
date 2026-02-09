@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 )
 
@@ -158,6 +159,41 @@ var matcherFlac = fileMatcher{
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
 		return "FLAC audio format"
+	},
+}
+
+var matcherMidi = fileMatcher{
+	name:   "midi",
+	minLen: 14,
+	match: func(b []byte, lenb int, magic int) bool {
+		if lenb < 14 || !HasPrefix(b, "MThd") {
+			return false
+		}
+		headerLen := peekBe(b[4:], 4)
+		if headerLen != 6 {
+			return false
+		}
+		format := peekBe(b[8:], 2)
+		tracks := peekBe(b[10:], 2)
+		return format >= 0 && format <= 2 && tracks > 0
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		format := peekBe(b[8:], 2)
+		tracks := peekBe(b[10:], 2)
+		division := peekBe(b[12:], 2)
+
+		trackWord := "track"
+		if tracks != 1 {
+			trackWord = "tracks"
+		}
+
+		if division&0x8000 == 0 {
+			return fmt.Sprintf("Standard MIDI data (format %d) using %d %s at 1/%d", format, tracks, trackWord, division)
+		}
+
+		fps := 256 - ((division >> 8) & 0xFF)
+		ticksPerFrame := division & 0xFF
+		return fmt.Sprintf("Standard MIDI data (format %d) using %d %s at %d fps, %d ticks/frame", format, tracks, trackWord, fps, ticksPerFrame)
 	},
 }
 

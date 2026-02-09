@@ -406,6 +406,8 @@ func mimeForDescription(desc string) string {
 		strings.Contains(descLower, "ogg flac audio"),
 		descLower == "ogg data":
 		return "audio/ogg"
+	case strings.Contains(descLower, "standard midi data"):
+		return "audio/midi"
 	case strings.Contains(descLower, "vmware ova appliance"):
 		return "application/x-virtualbox-ova"
 	case strings.Contains(descLower, "vmware virtual disk"):

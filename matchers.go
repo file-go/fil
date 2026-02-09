@@ -67,6 +67,7 @@ var matchers = []fileMatcher{
 	matcherPcapng,
 	matcherPcap,
 	matcherFlac,
+	matcherMidi,
 	matcherTdf,
 	matcherTdef,
 	matcherCab,
