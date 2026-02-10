@@ -60,6 +60,10 @@ func detectTextSubtype(b []byte) string {
 		return "Perl script"
 	}
 
+	if cLike := looksLikeCLang(top, topLower); cLike != "" {
+		return cLike
+	}
+
 	if looksLikeBatch(topLower) {
 		return "Windows batch script"
 	}
@@ -141,7 +145,7 @@ func looksLikeJavaScript(s string) bool {
 }
 
 func looksLikeTypeScript(s string) bool {
-	if looksLikePython(s) || looksLikePowerShell(s) || looksLikePerl(s) || looksLikeBatch(s) {
+	if looksLikePython(s) || looksLikePowerShell(s) || looksLikePerl(s) || looksLikeBatch(s) || looksLikeCLang(s, s) != "" {
 		return false
 	}
 
@@ -161,10 +165,82 @@ func looksLikeTypeScript(s string) bool {
 	if strings.Contains(s, ": string") || strings.Contains(s, ": number") || strings.Contains(s, ": boolean") {
 		hits++
 	}
-	if strings.Contains(s, " as const") || strings.Contains(s, " as ") {
+	if strings.Contains(s, " as const") {
 		hits++
 	}
 	return hits >= 2
+}
+
+func looksLikeCLang(s string, sLower string) string {
+	lines := strings.Split(s, "\n")
+	preproc := 0
+	cHits := 0
+	cppHits := 0
+	protoHits := 0
+
+	for _, raw := range lines {
+		line := strings.TrimSpace(raw)
+		if line == "" {
+			continue
+		}
+
+		if strings.HasPrefix(line, "#include") ||
+			strings.HasPrefix(line, "#define") ||
+			strings.HasPrefix(line, "#ifdef") ||
+			strings.HasPrefix(line, "#ifndef") ||
+			strings.HasPrefix(line, "#endif") ||
+			strings.HasPrefix(line, "#pragma") {
+			preproc++
+		}
+
+		if strings.HasPrefix(line, "typedef ") ||
+			strings.HasPrefix(line, "struct ") ||
+			strings.HasPrefix(line, "enum ") ||
+			strings.Contains(line, "uint8_t") ||
+			strings.Contains(line, "uint16_t") ||
+			strings.Contains(line, "uint32_t") ||
+			strings.Contains(line, "int8_t") ||
+			strings.Contains(line, "int16_t") ||
+			strings.Contains(line, "int32_t") ||
+			strings.Contains(line, "size_t") {
+			cHits++
+		}
+
+		if strings.Contains(line, "::") ||
+			strings.HasPrefix(line, "class ") ||
+			strings.HasPrefix(line, "namespace ") ||
+			strings.HasPrefix(line, "template<") ||
+			strings.Contains(line, "std::") ||
+			line == "public:" || line == "private:" || line == "protected:" {
+			cppHits++
+		}
+
+		if strings.Contains(line, "(") && strings.Contains(line, ")") && strings.HasSuffix(line, ";") {
+			protoHits++
+		}
+	}
+
+	if strings.Contains(sLower, "extern \"c++\"") {
+		cppHits += 2
+	}
+	if strings.Contains(sLower, "extern \"c\"") {
+		cHits++
+	}
+
+	if preproc > 0 {
+		cHits++
+	}
+	if protoHits >= 2 {
+		cHits++
+	}
+
+	if cppHits >= 1 && cHits >= 2 {
+		return "C++ source"
+	}
+	if cHits >= 3 {
+		return "C source"
+	}
+	return ""
 }
 
 func looksLikePython(s string) bool {
@@ -268,7 +344,7 @@ func looksLikeBatch(s string) bool {
 			commandHits++
 		case strings.HasPrefix(line, "goto "), strings.HasPrefix(line, "call "):
 			commandHits++
-		case strings.HasPrefix(line, "for "), strings.HasPrefix(line, "shift"):
+		case looksLikeBatchForLoop(line), line == "shift", strings.HasPrefix(line, "shift "):
 			commandHits++
 		case strings.HasPrefix(line, ":"):
 			// Label target, common in batch control flow.
@@ -280,7 +356,7 @@ func looksLikeBatch(s string) bool {
 			strings.Contains(line, "%2") ||
 			strings.Contains(line, "%~") ||
 			strings.Contains(line, "%%") ||
-			strings.Count(line, "!") >= 2 {
+			hasDelayedExpansion(line) {
 			varHits++
 		}
 	}
@@ -292,6 +368,36 @@ func looksLikeBatch(s string) bool {
 		return true
 	}
 	return commandHits >= 5
+}
+
+func looksLikeBatchForLoop(line string) bool {
+	if !strings.HasPrefix(line, "for ") {
+		return false
+	}
+	rest := strings.TrimSpace(line[len("for "):])
+	return strings.HasPrefix(rest, "%%") || strings.HasPrefix(rest, "%") || strings.HasPrefix(rest, "/")
+}
+
+func hasDelayedExpansion(line string) bool {
+	first := strings.IndexByte(line, '!')
+	if first < 0 {
+		return false
+	}
+	last := strings.LastIndexByte(line, '!')
+	if last <= first+1 {
+		return false
+	}
+	token := strings.TrimSpace(line[first+1 : last])
+	if token == "" {
+		return false
+	}
+	for _, r := range token {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func looksLikeINI(s string) (bool, bool) {
