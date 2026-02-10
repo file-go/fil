@@ -60,6 +60,34 @@ func detectTextSubtype(b []byte) string {
 		return "Perl script"
 	}
 
+	if looksLikePHP(topLower) {
+		return "PHP script"
+	}
+
+	if looksLikeASPX(topLower) {
+		return "ASP.NET page"
+	}
+
+	if looksLikeClassicASP(topLower) {
+		return "ASP script"
+	}
+
+	if looksLikeJSP(topLower) {
+		return "JSP page"
+	}
+
+	if looksLikeIISWebConfig(topLower) {
+		return "IIS web.config"
+	}
+
+	if looksLikeApacheConfig(topLower) {
+		return "Apache config"
+	}
+
+	if looksLikeNginxConfig(topLower) {
+		return "Nginx config"
+	}
+
 	if cLike := looksLikeCLang(top, topLower); cLike != "" {
 		return cLike
 	}
@@ -309,6 +337,95 @@ func looksLikePerl(s string) bool {
 		hits++
 	}
 	return hits >= 2
+}
+
+func looksLikePHP(s string) bool {
+	if strings.Contains(s, "<?php") {
+		return true
+	}
+	// Deliberately avoid bare "<?" to reduce XML false positives.
+	return false
+}
+
+func looksLikeASPX(s string) bool {
+	if strings.Contains(s, "<asp:") {
+		return true
+	}
+	if !strings.Contains(s, "<%@ page") {
+		return false
+	}
+	return strings.Contains(s, "runat=\"server\"") ||
+		strings.Contains(s, "codebehind=") ||
+		strings.Contains(s, "inherits=") ||
+		strings.Contains(s, "masterpagefile=")
+}
+
+func looksLikeClassicASP(s string) bool {
+	if !strings.Contains(s, "<%") {
+		return false
+	}
+	hits := 0
+	if strings.Contains(s, "vbscript") {
+		hits++
+	}
+	if strings.Contains(s, "option explicit") {
+		hits++
+	}
+	if strings.Contains(s, "response.write") {
+		hits++
+	}
+	return hits >= 1
+}
+
+func looksLikeJSP(s string) bool {
+	if strings.Contains(s, "<jsp:") {
+		return true
+	}
+	if !strings.Contains(s, "<%@ page") {
+		return false
+	}
+	return strings.Contains(s, "import=\"java.") ||
+		strings.Contains(s, "contenttype=") ||
+		strings.Contains(s, "pageencoding=") ||
+		strings.Contains(s, "session=")
+}
+
+func looksLikeApacheConfig(s string) bool {
+	hits := 0
+	if strings.Contains(s, "\nrewriteengine ") {
+		hits++
+	}
+	if strings.Contains(s, "\nrewriterule ") {
+		hits++
+	}
+	if strings.Contains(s, "\ndocumentroot ") {
+		hits++
+	}
+	if strings.Contains(s, "\ndirectoryindex ") {
+		hits++
+	}
+	return hits >= 2
+}
+
+func looksLikeNginxConfig(s string) bool {
+	hits := 0
+	if strings.Contains(s, "\nserver {") {
+		hits++
+	}
+	if strings.Contains(s, "\nlocation {") || strings.Contains(s, "\nlocation /") {
+		hits++
+	}
+	if strings.Contains(s, "\nproxy_pass ") {
+		hits++
+	}
+	if strings.Contains(s, "\nlisten ") {
+		hits++
+	}
+	return hits >= 2
+}
+
+func looksLikeIISWebConfig(s string) bool {
+	return strings.Contains(s, "<configuration") && strings.Contains(s, "<system.webserver")
 }
 
 func looksLikeBatch(s string) bool {
