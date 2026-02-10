@@ -114,6 +114,12 @@ var matcherDosMbrBootSector = fileMatcher{
 }
 
 func isDosMbrBootSector(b []byte) bool {
+	// Bootable ISO images can contain 0x55AA and MBR-like bytes.
+	// If ISO9660 primary volume descriptor is present, prefer ISO classification.
+	if len(b) >= 0x8006 && Equal(b[0x8001:0x8006], "CD001") {
+		return false
+	}
+
 	if len(b) < 512 || b[510] != 0x55 || b[511] != 0xAA {
 		return false
 	}
