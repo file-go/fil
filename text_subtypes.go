@@ -108,12 +108,12 @@ func detectTextSubtype(b []byte) string {
 		return delimited
 	}
 
-	if looksLikeMarkdown(top) {
-		return "Markdown text"
-	}
-
 	if looksLikeYAML(top) {
 		return "YAML"
+	}
+
+	if looksLikeMarkdown(top) {
+		return "Markdown text"
 	}
 
 	return ""
