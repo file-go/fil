@@ -350,7 +350,7 @@ func mimeForDescription(desc string) string {
 		return "image/x-icon"
 	case descLower == "photoshop document":
 		return "image/vnd.adobe.photoshop"
-	case descLower == "pdf image":
+	case descLower == "pdf document", descLower == "pdf image":
 		return "application/pdf"
 	case strings.Contains(descLower, "zip archive"):
 		return "application/zip"
@@ -477,6 +477,8 @@ func mimeForDescription(desc string) string {
 		return "application/x-virtualbox-ova"
 	case strings.Contains(descLower, "vmware virtual disk"):
 		return "application/x-vmdk"
+	case strings.Contains(descLower, "vmware nvram file"):
+		return "application/x-vmware-nvram"
 	case strings.Contains(descLower, "vmware snapshot state"):
 		return "application/x-vmware-vmsn"
 	case strings.Contains(descLower, "vmware vm configuration"):

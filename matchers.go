@@ -17,6 +17,7 @@ var matchers = []fileMatcher{
 	matcherZip,
 	matcherDmg,
 	matcherVmdk,
+	matcherVmwareNvram,
 	matcherQcow,
 	matcherVhdx,
 	matcherVdi,

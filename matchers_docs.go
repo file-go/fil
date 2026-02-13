@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
+	"strings"
 )
 
 var matcherBmp = fileMatcher{
@@ -24,7 +25,7 @@ var matcherPdf = fileMatcher{
 		return lenb > 50 && HasPrefix(b, "\x25\x50\x44\x46")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
-		return "PDF image"
+		return "PDF document"
 	},
 }
 
@@ -91,6 +92,9 @@ var matcherXml = fileMatcher{
 		return lenb > 32 && HasPrefix(b, "<?xml version")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		if looksLikeVMwareVMXF(b) {
+			return "VMware supplemental configuration (VMXF)"
+		}
 		return "XML document"
 	},
 }
@@ -207,6 +211,22 @@ func looksLikeKMLDocument(b []byte) bool {
 
 func hasKMLMarkers(s []byte) bool {
 	return bytes.Contains(s, []byte("<kml")) && bytes.Contains(s, []byte("xmlns="))
+}
+
+func looksLikeVMwareVMXF(b []byte) bool {
+	if len(b) == 0 {
+		return false
+	}
+
+	end := len(b)
+	if end > 8192 {
+		end = 8192
+	}
+	top := strings.ToLower(string(bytes.TrimSpace(b[:end])))
+
+	return strings.Contains(top, "<foundry") &&
+		strings.Contains(top, "<vm>") &&
+		strings.Contains(top, "vmxpathname")
 }
 
 func hasHTMLMarkers(s []byte) bool {

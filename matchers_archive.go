@@ -57,6 +57,17 @@ var matcherVmdk = fileMatcher{
 	},
 }
 
+var matcherVmwareNvram = fileMatcher{
+	name:   "vmware-nvram",
+	minLen: 64,
+	match: func(b []byte, lenb int, magic int) bool {
+		return looksLikeVMwareNvram(b)
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "VMware NVRAM file"
+	},
+}
+
 var matcherQcow = fileMatcher{
 	name:   "qcow",
 	minLen: 4,
@@ -66,6 +77,30 @@ var matcherQcow = fileMatcher{
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
 		return "QEMU QCOW disk image"
 	},
+}
+
+func looksLikeVMwareNvram(b []byte) bool {
+	// VMware .nvram files commonly store a UEFI firmware volume header at byte 0.
+	// EFI_FIRMWARE_VOLUME_HEADER signature "_FVH" sits at offset 0x28.
+	if len(b) < 64 || !Equal(b[40:44], "_FVH") {
+		return false
+	}
+
+	// UEFI firmware volume header starts with a 16-byte zero vector.
+	for i := 0; i < 16; i++ {
+		if b[i] != 0x00 {
+			return false
+		}
+	}
+
+	// Header length and revision sanity checks help reduce false positives.
+	headerLen := peekLe(b[52:54], 2)
+	if headerLen < 56 || headerLen > len(b) {
+		return false
+	}
+
+	revision := b[55]
+	return revision == 1 || revision == 2
 }
 
 var matcherVhdx = fileMatcher{
