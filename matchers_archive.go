@@ -1,6 +1,9 @@
 package main
 
-import "os"
+import (
+	"bytes"
+	"os"
+)
 
 var matcherAr = fileMatcher{
 	name:   "ar",
@@ -59,7 +62,7 @@ var matcherVmdk = fileMatcher{
 
 var matcherVmwareNvram = fileMatcher{
 	name:   "vmware-nvram",
-	minLen: 64,
+	minLen: 32,
 	match: func(b []byte, lenb int, magic int) bool {
 		return looksLikeVMwareNvram(b)
 	},
@@ -80,6 +83,13 @@ var matcherQcow = fileMatcher{
 }
 
 func looksLikeVMwareNvram(b []byte) bool {
+	if looksLikeVMwareNvramMRVN(b) {
+		return true
+	}
+	return looksLikeVMwareNvramUEFI(b)
+}
+
+func looksLikeVMwareNvramUEFI(b []byte) bool {
 	// VMware .nvram files commonly store a UEFI firmware volume header at byte 0.
 	// EFI_FIRMWARE_VOLUME_HEADER signature "_FVH" sits at offset 0x28.
 	if len(b) < 64 || !Equal(b[40:44], "_FVH") {
@@ -101,6 +111,27 @@ func looksLikeVMwareNvram(b []byte) bool {
 
 	revision := b[55]
 	return revision == 1 || revision == 2
+}
+
+func looksLikeVMwareNvramMRVN(b []byte) bool {
+	// Legacy VMware NVRAM often starts with "MRVN" and then CMOS-tagged records.
+	if len(b) < 32 || !HasPrefix(b, "MRVN") {
+		return false
+	}
+
+	// Version field is usually a small LE integer (often 1).
+	version := peekLe(b[4:8], 4)
+	if version <= 0 || version > 16 {
+		return false
+	}
+
+	end := len(b)
+	if end > 512 {
+		end = 512
+	}
+
+	// Require at least one CMOS marker near the header.
+	return bytes.Contains(b[8:end], []byte("CMOS"))
 }
 
 var matcherVhdx = fileMatcher{
