@@ -15,6 +15,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"unicode/utf16"
 	"unicode/utf8"
@@ -362,6 +363,8 @@ func mimeForDescription(desc string) string {
 		return "application/zip"
 	case strings.Contains(descLower, "posix tar archive"):
 		return "application/x-tar"
+	case strings.Contains(descLower, "debian binary package"):
+		return "application/vnd.debian.binary-package"
 	case strings.Contains(descLower, "gzip compressed data"):
 		return "application/gzip"
 	case strings.Contains(descLower, "bzip2 compressed data"):
@@ -1047,6 +1050,121 @@ func doTar(file *os.File) string {
 	}
 
 	return "Posix tar archive"
+}
+
+func doAr(file *os.File) string {
+	if file == nil {
+		return "ar archive"
+	}
+	if _, err := file.Seek(0, 0); err != nil {
+		return "ar archive"
+	}
+
+	header := make([]byte, 8)
+	if _, err := io.ReadFull(file, header); err != nil || !bytes.Equal(header, []byte("!<arch>\n")) {
+		return "ar archive"
+	}
+
+	const maxEntries = 200
+
+	hasDebianBinary := false
+	format := ""
+	controlTar := ""
+	dataComp := ""
+
+	for i := 0; i < maxEntries; i++ {
+		hdr := make([]byte, 60)
+		_, err := io.ReadFull(file, hdr)
+		if err == io.EOF || err == io.ErrUnexpectedEOF {
+			break
+		}
+		if err != nil {
+			return "ar archive"
+		}
+		if hdr[58] != '`' || hdr[59] != '\n' {
+			return "ar archive"
+		}
+
+		name := normalizeArEntryName(string(hdr[:16]))
+		lower := strings.ToLower(name)
+
+		sizeStr := strings.TrimSpace(string(hdr[48:58]))
+		size, err := strconv.Atoi(sizeStr)
+		if err != nil || size < 0 {
+			return "ar archive"
+		}
+
+		readAndDiscard := func(n int) error {
+			if n <= 0 {
+				return nil
+			}
+			_, err := io.CopyN(io.Discard, file, int64(n))
+			return err
+		}
+
+		readN := 0
+		switch {
+		case lower == "debian-binary":
+			hasDebianBinary = true
+			readN = size
+			if readN > 64 {
+				readN = 64
+			}
+			buf := make([]byte, readN)
+			if _, err := io.ReadFull(file, buf); err != nil {
+				return "ar archive"
+			}
+			format = strings.TrimSpace(string(buf))
+		case strings.HasPrefix(lower, "control.tar."):
+			controlTar = name
+		case strings.HasPrefix(lower, "data.tar."):
+			dataComp = tarPayloadCompression(lower)
+		}
+
+		if err := readAndDiscard(size - readN); err != nil {
+			return "ar archive"
+		}
+		if size%2 != 0 {
+			if _, err := file.Seek(1, io.SeekCurrent); err != nil {
+				return "ar archive"
+			}
+		}
+	}
+
+	if hasDebianBinary && controlTar != "" {
+		if format == "" {
+			format = "2.0"
+		}
+		desc := "Debian binary package (format " + format + "), with " + controlTar
+		if dataComp != "" {
+			desc += ", data compression " + dataComp
+		}
+		return desc
+	}
+	return "ar archive"
+}
+
+func normalizeArEntryName(name string) string {
+	name = strings.TrimSpace(name)
+	name = strings.TrimSuffix(name, "/")
+	return name
+}
+
+func tarPayloadCompression(name string) string {
+	switch {
+	case strings.HasSuffix(name, ".zst"):
+		return "zst"
+	case strings.HasSuffix(name, ".zs"):
+		return "zs"
+	case strings.HasSuffix(name, ".xz"):
+		return "xz"
+	case strings.HasSuffix(name, ".gz"):
+		return "gzip"
+	case strings.HasSuffix(name, ".bz2"):
+		return "bzip2"
+	default:
+		return ""
+	}
 }
 
 func describePE(contentByte []byte, magic int) string {

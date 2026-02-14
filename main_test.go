@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -254,5 +255,58 @@ func TestDetectFileType_ZipSubtypes(t *testing.T) {
 	}
 	if desc != "Microsoft OOXML" {
 		t.Fatalf("ooxml desc = %q, want %q", desc, "Microsoft OOXML")
+	}
+}
+
+func TestDetectFileType_DebianArSubtype(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	p := filepath.Join(tmp, "sample.deb")
+
+	f, err := os.Create(p)
+	if err != nil {
+		t.Fatalf("os.Create(%q) error = %v", p, err)
+	}
+
+	add := func(name string, body string) {
+		t.Helper()
+		if len(name) > 16 {
+			t.Fatalf("ar test entry name too long: %q", name)
+		}
+		if _, err := io.WriteString(f, fmt.Sprintf("%-16s%-12d%-6d%-6d%-8o%-10d`\n", name, 0, 0, 0, 0644, len(body))); err != nil {
+			t.Fatalf("ar write header %q error = %v", name, err)
+		}
+		if _, err := io.WriteString(f, body); err != nil {
+			t.Fatalf("ar write body %q error = %v", name, err)
+		}
+		if len(body)%2 != 0 {
+			if _, err := io.WriteString(f, "\n"); err != nil {
+				t.Fatalf("ar write pad %q error = %v", name, err)
+			}
+		}
+	}
+
+	if _, err := io.WriteString(f, "!<arch>\n"); err != nil {
+		t.Fatalf("ar write magic error = %v", err)
+	}
+	add("debian-binary", "2.0\n")
+	add("control.tar.xz", "dummy")
+	add("data.tar.zst", "dummy")
+	if err := f.Close(); err != nil {
+		t.Fatalf("file close error = %v", err)
+	}
+
+	desc, err := detectFileType(p)
+	if err != nil {
+		t.Fatalf("detectFileType(deb) error = %v", err)
+	}
+	want := "Debian binary package (format 2.0), with control.tar.xz, data compression zst"
+	if desc != want {
+		t.Fatalf("deb desc = %q, want %q", desc, want)
+	}
+
+	if got := mimeForDescription(desc); got != "application/vnd.debian.binary-package" {
+		t.Fatalf("deb mime = %q, want %q", got, "application/vnd.debian.binary-package")
 	}
 }

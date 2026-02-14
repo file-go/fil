@@ -12,7 +12,7 @@ var matcherAr = fileMatcher{
 		return lenb >= 8 && HasPrefix(b, "!<arch>\n")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
-		return "ar archive"
+		return doAr(file)
 	},
 }
 
