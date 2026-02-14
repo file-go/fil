@@ -1,6 +1,7 @@
 package main
 
 import (
+	"archive/zip"
 	"bytes"
 	"encoding/json"
 	"io"
@@ -49,6 +50,7 @@ func TestDetectFromBytes_Fixtures(t *testing.T) {
 		{name: "woff", data: []byte("wOFF"), desc: "WOFF font", mime: "application/octet-stream"},
 		{name: "woff2", data: []byte("wOF2"), desc: "WOFF2 font", mime: "application/octet-stream"},
 		{name: "bmp", data: append([]byte{'B', 'M', 0, 0, 0, 0, 0, 0, 0, 0}, make([]byte, 41)...), desc: "BMP image", mime: "image/bmp"},
+		{name: "wmf-placeable", data: append([]byte("\xD7\xCD\xC6\x9A"), make([]byte, 16)...), desc: "Windows metafile", mime: "image/wmf"},
 		{name: "pdf", data: append([]byte("%PDF"), make([]byte, 47)...), desc: "PDF document", mime: "application/pdf"},
 		{name: "tiff", data: append([]byte{0x49, 0x49, 0x2A, 0x00}, make([]byte, 13)...), desc: "TIFF image data", mime: "image/tiff"},
 		{name: "mp3-id3", data: append([]byte("ID3"), make([]byte, 14)...), desc: "MP3 audio file", mime: "application/octet-stream"},
@@ -82,9 +84,13 @@ func TestDetectFromBytes_Fixtures(t *testing.T) {
 		{name: "html", data: []byte("<!DOCTYPE html><html><body>ok</body></html>"), desc: "HTML document", mime: "application/octet-stream"},
 		{name: "svg", data: []byte("<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>"), desc: "SVG Scalable Vector Graphics image", mime: "image/svg+xml"},
 		{name: "xml", data: append([]byte("<?xml version=\"1.0\"?><x/>"), make([]byte, 12)...), desc: "XML document", mime: "application/octet-stream"},
+		{name: "xml-utf8-bom", data: []byte("\xEF\xBB\xBF<?xml version=\"1.0\"?><x/>"), desc: "XML document", mime: "application/octet-stream"},
+		{name: "xml-utf16le-bom", data: []byte("\xFF\xFE<\x00?\x00x\x00m\x00l\x00 \x00v\x00e\x00r\x00s\x00i\x00o\x00n\x00=\x00\"\x001\x00.\x000\x00\"\x00?\x00>\x00<\x00x\x00/\x00>\x00"), desc: "XML document", mime: "application/octet-stream"},
 		{name: "json", data: []byte("{\"a\":1,\"b\":2}"), desc: "JSON data", mime: "application/octet-stream"},
+		{name: "qml", data: []byte("import QtQuick 2.0\nItem {\n  property int count: 0\n}\n"), descLike: "ASCII text, QML source", mime: "text/plain"},
+		{name: "powershell-not-ini", data: []byte("[CmdletBinding()]\nparam(\n[string]$Name = \"x\"\n)\n"), descLike: "PowerShell script", mime: "text/plain"},
 		{name: "ascii-text", data: []byte("hello world"), desc: "ASCII text", mime: "text/plain"},
-		{name: "utf8-text", data: []byte("hello, 世界"), desc: "UTF-8 text", mime: "text/plain"},
+		{name: "utf8-text", data: []byte("hello, \u4e16\u754c"), desc: "UTF-8 text", mime: "text/plain"},
 		{name: "data-fallback", data: []byte{0x00, 0x01, 0x02, 0x03, 0x04}, desc: "data", mime: "application/octet-stream"},
 	}
 
@@ -126,6 +132,9 @@ func TestDetectFileType_ProjectFixtures(t *testing.T) {
 		tt := tt
 		t.Run(tt.path, func(t *testing.T) {
 			t.Parallel()
+			if _, err := os.Stat(tt.path); err != nil {
+				t.Skipf("fixture unavailable: %v", err)
+			}
 			got, err := detectFileType(tt.path)
 			if err != nil {
 				t.Fatalf("detectFileType(%q) error = %v", tt.path, err)
@@ -143,7 +152,6 @@ func TestDetectFileType_ProjectFixtures(t *testing.T) {
 func TestEmitJSON(t *testing.T) {
 	t.Parallel()
 
-	// Capture stdout so we can validate the JSONL payload.
 	oldStdout := os.Stdout
 	r, w, err := os.Pipe()
 	if err != nil {
@@ -181,5 +189,63 @@ func TestEmitJSON(t *testing.T) {
 	}
 	if got.Error != "" {
 		t.Fatalf("error = %q, want empty", got.Error)
+	}
+}
+
+func TestDetectFileType_ZipSubtypes(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+
+	makeZip := func(name string, entries map[string]string) string {
+		t.Helper()
+		p := filepath.Join(tmp, name)
+		f, err := os.Create(p)
+		if err != nil {
+			t.Fatalf("os.Create(%q) error = %v", p, err)
+		}
+
+		zw := zip.NewWriter(f)
+		for entryName, content := range entries {
+			w, err := zw.Create(entryName)
+			if err != nil {
+				t.Fatalf("zip create %q error = %v", entryName, err)
+			}
+			if _, err := io.WriteString(w, content); err != nil {
+				t.Fatalf("zip write %q error = %v", entryName, err)
+			}
+		}
+		if err := zw.Close(); err != nil {
+			t.Fatalf("zip close error = %v", err)
+		}
+		if err := f.Close(); err != nil {
+			t.Fatalf("file close error = %v", err)
+		}
+		return p
+	}
+
+	silverlight := makeZip("sample.xap", map[string]string{
+		"AppManifest.xaml": "<Deployment />",
+		"AssemblyInfo.cs":  "class X {}",
+	})
+	desc, err := detectFileType(silverlight)
+	if err != nil {
+		t.Fatalf("detectFileType(silverlight) error = %v", err)
+	}
+	if desc != "Microsoft Silverlight Application" {
+		t.Fatalf("silverlight desc = %q, want %q", desc, "Microsoft Silverlight Application")
+	}
+
+	ooxml := makeZip("sample.accdt", map[string]string{
+		"[Content_Types].xml": "<Types/>",
+		"_rels/.rels":         "<Relationships/>",
+		"docProps/core.xml":   "<cp:coreProperties/>",
+	})
+	desc, err = detectFileType(ooxml)
+	if err != nil {
+		t.Fatalf("detectFileType(ooxml) error = %v", err)
+	}
+	if desc != "Microsoft OOXML" {
+		t.Fatalf("ooxml desc = %q, want %q", desc, "Microsoft OOXML")
 	}
 }

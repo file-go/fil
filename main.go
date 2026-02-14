@@ -340,6 +340,8 @@ func mimeForDescription(desc string) string {
 		return "image/x-tga"
 	case descLower == "bmp image":
 		return "image/bmp"
+	case descLower == "windows metafile":
+		return "image/wmf"
 	case descLower == "tiff image data":
 		return "image/tiff"
 	case descLower == "google webp file":
@@ -378,6 +380,10 @@ func mimeForDescription(desc string) string {
 		return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 	case strings.Contains(descLower, "microsoft powerpoint 2007+"):
 		return "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+	case strings.Contains(descLower, "microsoft ooxml"):
+		return "application/vnd.openxmlformats-officedocument"
+	case strings.Contains(descLower, "microsoft silverlight application"):
+		return "application/x-silverlight-app"
 	case strings.Contains(descLower, "epub document"):
 		return "application/epub+zip"
 	case descLower == "opendocument text":
@@ -420,6 +426,8 @@ func mimeForDescription(desc string) string {
 		return "message/rfc822"
 	case strings.Contains(descLower, "openvpn configuration"):
 		return "application/x-openvpn-profile"
+	case strings.Contains(descLower, "qml source"):
+		return "text/plain"
 	case strings.Contains(descLower, "kml geospatial data"):
 		return "application/vnd.google-earth.kml+xml"
 	case strings.Contains(descLower, "apple udif disk image"):
@@ -901,8 +909,13 @@ func doZip(file *os.File) string {
 		if err != nil {
 			return "Unknown file type"
 		}
+		hasContentTypes := false
+		hasRels := false
+		hasXMLPayload := false
+
 		// Loop through the files in the ZIP archive
 		for _, zipFile := range zipReader.File {
+			lowerName := strings.ToLower(zipFile.Name)
 			switch zipFile.Name {
 			case "word/document.xml":
 				return "Microsoft Word 2007+"
@@ -930,6 +943,23 @@ func doZip(file *os.File) string {
 					return "EPUB document"
 				}
 			}
+
+			if lowerName == "appmanifest.xaml" || lowerName == "wmappmanifest.xml" {
+				return "Microsoft Silverlight Application"
+			}
+			if lowerName == "[content_types].xml" {
+				hasContentTypes = true
+			}
+			if strings.HasPrefix(lowerName, "_rels/") {
+				hasRels = true
+			}
+			if strings.HasSuffix(lowerName, ".xml") {
+				hasXMLPayload = true
+			}
+		}
+
+		if hasContentTypes && hasRels && hasXMLPayload {
+			return "Microsoft OOXML"
 		}
 	}
 

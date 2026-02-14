@@ -49,6 +49,7 @@ var matchers = []fileMatcher{
 	matcherPe,
 	matcherDosMbrBootSector,
 	matcherIso9660,
+	matcherWmf,
 	matcherBmp,
 	matcherPdf,
 	matcherCr2,

@@ -25,19 +25,16 @@ func detectTextSubtype(b []byte) string {
 		return "OpenVPN config"
 	}
 
-	if isINI, hasExtensions := looksLikeINI(top); isINI {
-		if hasExtensions {
-			return "Generic INItialization configuration [extensions]"
-		}
-		return "Generic INItialization configuration"
-	}
-
 	if strings.HasPrefix(top, "#!/bin/sh") || strings.HasPrefix(top, "#!/bin/bash") || strings.HasPrefix(top, "#!/usr/bin/env sh") {
 		return "shell script"
 	}
 
 	if strings.HasPrefix(top, "#!/usr/bin/python") || strings.HasPrefix(top, "#!/usr/bin/env python") {
 		return "Python script"
+	}
+
+	if looksLikeQML(topLower) {
+		return "QML source"
 	}
 
 	if looksLikePython(topLower) {
@@ -102,6 +99,13 @@ func detectTextSubtype(b []byte) string {
 
 	if looksLikeJavaScript(topLower) {
 		return "JavaScript"
+	}
+
+	if isINI, hasExtensions := looksLikeINI(top); isINI {
+		if hasExtensions {
+			return "Generic INItialization configuration [extensions]"
+		}
+		return "Generic INItialization configuration"
 	}
 
 	if delimited := detectDelimitedSubtype(top); delimited != "" {
@@ -199,6 +203,26 @@ func looksLikeTypeScript(s string) bool {
 	return hits >= 2
 }
 
+func looksLikeQML(s string) bool {
+	hits := 0
+	if strings.Contains(s, "\nimport qtquick") || strings.Contains(s, "\nimport qtgraphicaleffects") || strings.Contains(s, "\nimport qtquick.controls") {
+		hits++
+	}
+	if strings.Contains(s, "\nproperty ") {
+		hits++
+	}
+	if strings.Contains(s, "\nanchors.") {
+		hits++
+	}
+	if strings.Contains(s, " onclicked:") || strings.Contains(s, " ontriggered:") || strings.Contains(s, "\nsignal ") {
+		hits++
+	}
+	if strings.Contains(s, "rectangle {") || strings.Contains(s, "item {") || strings.Contains(s, "component {") {
+		hits++
+	}
+	return hits >= 2
+}
+
 func looksLikeCLang(s string, sLower string) string {
 	lines := strings.Split(s, "\n")
 	preproc := 0
@@ -272,6 +296,10 @@ func looksLikeCLang(s string, sLower string) string {
 }
 
 func looksLikePython(s string) bool {
+	if looksLikeQML(s) {
+		return false
+	}
+
 	hits := 0
 	if strings.Count(s, "\ndef ") > 0 {
 		hits++
@@ -518,6 +546,11 @@ func hasDelayedExpansion(line string) bool {
 }
 
 func looksLikeINI(s string) (bool, bool) {
+	sLower := "\n" + strings.ToLower(s)
+	if looksLikePowerShell(sLower) || looksLikePython(sLower) || looksLikePerl(sLower) || looksLikeBatch(sLower) || looksLikeQML(sLower) {
+		return false, false
+	}
+
 	lines := strings.Split(s, "\n")
 	sections := 0
 	keyvals := 0

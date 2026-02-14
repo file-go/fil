@@ -18,6 +18,25 @@ var matcherBmp = fileMatcher{
 	},
 }
 
+var matcherWmf = fileMatcher{
+	name:   "wmf",
+	minLen: 4,
+	match: func(b []byte, lenb int, magic int) bool {
+		if lenb < 4 {
+			return false
+		}
+		// Placeable WMF.
+		if HasPrefix(b, "\xD7\xCD\xC6\x9A") {
+			return true
+		}
+		// Standard WMF.
+		return HasPrefix(b, "\x01\x00\x09\x00") || HasPrefix(b, "\x02\x00\x09\x00")
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "Windows metafile"
+	},
+}
+
 var matcherPdf = fileMatcher{
 	name:   "pdf",
 	minLen: 51,
@@ -87,9 +106,9 @@ var matcherHtml = fileMatcher{
 
 var matcherXml = fileMatcher{
 	name:   "xml",
-	minLen: 33,
+	minLen: 5,
 	match: func(b []byte, lenb int, magic int) bool {
-		return lenb > 32 && HasPrefix(b, "<?xml version")
+		return looksLikeXMLDocument(b)
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
 		if looksLikeVMwareVMXF(b) {
@@ -204,6 +223,34 @@ func looksLikeKMLDocument(b []byte) bool {
 
 	if utf16Decoded, ok := decodeUTF16ToASCII(sample); ok {
 		return hasKMLMarkers(bytes.ToLower(bytes.TrimSpace(utf16Decoded)))
+	}
+
+	return false
+}
+
+func looksLikeXMLDocument(b []byte) bool {
+	if len(b) < 5 {
+		return false
+	}
+
+	end := len(b)
+	if end > 8192 {
+		end = 8192
+	}
+	sample := bytes.TrimSpace(b[:end])
+	if len(sample) == 0 {
+		return false
+	}
+
+	utf8Sample := bytes.TrimSpace(stripUTF8BOM(sample))
+	utf8Lower := bytes.ToLower(utf8Sample)
+	if bytes.HasPrefix(utf8Lower, []byte("<?xml")) || bytes.HasPrefix(utf8Lower, []byte("<")) {
+		return true
+	}
+
+	if utf16Decoded, ok := decodeUTF16ToASCII(sample); ok {
+		decoded := bytes.ToLower(bytes.TrimSpace(utf16Decoded))
+		return bytes.HasPrefix(decoded, []byte("<?xml")) || bytes.HasPrefix(decoded, []byte("<"))
 	}
 
 	return false
