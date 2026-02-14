@@ -352,6 +352,8 @@ func mimeForDescription(desc string) string {
 		return "image/vnd.adobe.photoshop"
 	case descLower == "pdf document", descLower == "pdf image":
 		return "application/pdf"
+	case strings.Contains(descLower, "7zip archive data"):
+		return "application/x-7z-compressed"
 	case strings.Contains(descLower, "zip archive"):
 		return "application/zip"
 	case strings.Contains(descLower, "posix tar archive"):
@@ -370,8 +372,6 @@ func mimeForDescription(desc string) string {
 		return "application/x-lzip"
 	case strings.Contains(descLower, "rar archive data"):
 		return "application/vnd.rar"
-	case strings.Contains(descLower, "7zip archive data"):
-		return "application/x-7z-compressed"
 	case strings.Contains(descLower, "microsoft word 2007+"):
 		return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 	case strings.Contains(descLower, "microsoft excel 2007+"):
