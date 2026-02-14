@@ -400,6 +400,17 @@ var matcherIco = fileMatcher{
 	},
 }
 
+var matcherCur = fileMatcher{
+	name:   "cur",
+	minLen: 6,
+	match: func(b []byte, lenb int, magic int) bool {
+		return lenb >= 6 && HasPrefix(b, "\x00\x00\x02\x00") && peekLe(b[4:], 2) > 0
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "MS Windows cursor resource"
+	},
+}
+
 var matcherFlac = fileMatcher{
 	name:   "flac",
 	minLen: 17,

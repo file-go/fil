@@ -350,6 +350,8 @@ func mimeForDescription(desc string) string {
 		return "image/svg+xml"
 	case descLower == "ms windows icon resource":
 		return "image/x-icon"
+	case descLower == "ms windows cursor resource":
+		return "image/x-icon"
 	case descLower == "photoshop document":
 		return "image/vnd.adobe.photoshop"
 	case descLower == "pdf document", descLower == "pdf image":
@@ -372,8 +374,12 @@ func mimeForDescription(desc string) string {
 		return "application/x-lz4"
 	case strings.Contains(descLower, "lzip compressed data"):
 		return "application/x-lzip"
+	case strings.Contains(descLower, "ms compress archive data"):
+		return "application/x-ms-compress"
 	case strings.Contains(descLower, "rar archive data"):
 		return "application/vnd.rar"
+	case strings.Contains(descLower, "ms windows htmlhelp data"):
+		return "application/vnd.ms-htmlhelp"
 	case strings.Contains(descLower, "microsoft word 2007+"):
 		return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 	case strings.Contains(descLower, "microsoft excel 2007+"):

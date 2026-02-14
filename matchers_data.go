@@ -146,6 +146,17 @@ var matcherLnk = fileMatcher{
 	},
 }
 
+var matcherChm = fileMatcher{
+	name:   "chm",
+	minLen: 4,
+	match: func(b []byte, lenb int, magic int) bool {
+		return lenb >= 4 && HasPrefix(b, "ITSF")
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "MS Windows HtmlHelp Data"
+	},
+}
+
 var matcherRegistryHive = fileMatcher{
 	name:   "registry-hive",
 	minLen: 4,

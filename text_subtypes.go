@@ -208,7 +208,13 @@ func looksLikeQML(s string) bool {
 	if strings.Contains(s, "\nimport qtquick") || strings.Contains(s, "\nimport qtgraphicaleffects") || strings.Contains(s, "\nimport qtquick.controls") {
 		hits++
 	}
+	if strings.Contains(s, "\nimport qtwebengine") || strings.Contains(s, "\nimport qtqml") {
+		hits++
+	}
 	if strings.Contains(s, "\nproperty ") {
+		hits++
+	}
+	if strings.Contains(s, "\nid: ") {
 		hits++
 	}
 	if strings.Contains(s, "\nanchors.") {
@@ -218,6 +224,9 @@ func looksLikeQML(s string) bool {
 		hits++
 	}
 	if strings.Contains(s, "rectangle {") || strings.Contains(s, "item {") || strings.Contains(s, "component {") {
+		hits++
+	}
+	if strings.Contains(s, "listview {") || strings.Contains(s, "loader {") || strings.Contains(s, "mousearea {") || strings.Contains(s, "text {") {
 		hits++
 	}
 	return hits >= 2
@@ -300,15 +309,19 @@ func looksLikePython(s string) bool {
 		return false
 	}
 
+	structuralHits := 0
 	hits := 0
 	if strings.Count(s, "\ndef ") > 0 {
 		hits++
+		structuralHits++
 	}
 	if strings.Count(s, "\nclass ") > 0 {
 		hits++
+		structuralHits++
 	}
 	if strings.Count(s, "\nfrom ") > 0 && strings.Contains(s, " import ") {
 		hits++
+		structuralHits++
 	}
 	if importCount := strings.Count(s, "\nimport "); importCount > 0 {
 		// Multiple import statements are a strong Python signal.
@@ -316,8 +329,13 @@ func looksLikePython(s string) bool {
 	}
 	if strings.Contains(s, "\nif __name__ == \"__main__\":") || strings.Contains(s, "\nif __name__ == '__main__':") {
 		hits++
+		structuralHits++
 	}
-	return hits >= 2
+	if strings.Contains(s, "\nself.") || strings.Contains(s, "\nexcept ") || strings.Contains(s, "\ntry:") {
+		structuralHits++
+	}
+	// Avoid classifying files based only on import lines.
+	return hits >= 2 && structuralHits >= 1
 }
 
 func minInt(a int, b int) int {
@@ -586,7 +604,7 @@ func looksLikeINI(s string) (bool, bool) {
 		}
 	}
 
-	return sections > 0 && keyvals > 0, hasExtensions
+	return sections > 0 && keyvals >= 2, hasExtensions
 }
 
 func isValidINISectionLine(line string, closingBracket int) bool {

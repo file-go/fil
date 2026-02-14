@@ -223,6 +223,17 @@ var matcherGzip = fileMatcher{
 	},
 }
 
+var matcherSzdd = fileMatcher{
+	name:   "szdd",
+	minLen: 8,
+	match: func(b []byte, lenb int, magic int) bool {
+		return lenb >= 8 && HasPrefix(b, "SZDD")
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "MS Compress archive data, SZDD variant"
+	},
+}
+
 var matcherRar = fileMatcher{
 	name:   "rar",
 	minLen: 7,
