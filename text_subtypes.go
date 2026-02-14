@@ -573,12 +573,15 @@ func looksLikeINI(s string) (bool, bool) {
 	sections := 0
 	keyvals := 0
 	hasExtensions := false
+	nonComment := 0
+	structured := 0
 
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, ";") || strings.HasPrefix(line, "#") {
 			continue
 		}
+		nonComment++
 
 		if strings.HasPrefix(line, "[") {
 			end := strings.Index(line, "]")
@@ -588,6 +591,7 @@ func looksLikeINI(s string) (bool, bool) {
 					continue
 				}
 				sections++
+				structured++
 				if strings.EqualFold(section, "extensions") {
 					hasExtensions = true
 				}
@@ -600,11 +604,19 @@ func looksLikeINI(s string) (bool, bool) {
 			key := strings.TrimSpace(line[:eq])
 			if isLikelyINIKeyName(key) {
 				keyvals++
+				structured++
 			}
 		}
 	}
 
-	return sections > 0 && keyvals >= 2, hasExtensions
+	if !(sections > 0 && keyvals >= 2) {
+		return false, false
+	}
+	// Require mostly structured INI-style lines to avoid over-classifying plain text.
+	if nonComment > 0 && structured*100/nonComment < 70 {
+		return false, false
+	}
+	return true, hasExtensions
 }
 
 func isValidINISectionLine(line string, closingBracket int) bool {

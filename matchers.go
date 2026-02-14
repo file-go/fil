@@ -92,6 +92,8 @@ var matchers = []fileMatcher{
 	matcherRecycleBinI,
 	matcherPcapng,
 	matcherPcap,
+	matcherCrx,
+	matcherRcc,
 	matcherFlac,
 	matcherMidi,
 	matcherTdf,

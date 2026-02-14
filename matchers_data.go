@@ -135,6 +135,32 @@ var matcherPcap = fileMatcher{
 	},
 }
 
+var matcherCrx = fileMatcher{
+	name:   "crx",
+	minLen: 12,
+	match: func(b []byte, lenb int, magic int) bool {
+		if lenb < 12 || !HasPrefix(b, "Cr24") {
+			return false
+		}
+		v := peekLe(b[4:], 4)
+		return v == 2 || v == 3
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "Google Chrome extension"
+	},
+}
+
+var matcherRcc = fileMatcher{
+	name:   "rcc",
+	minLen: 4,
+	match: func(b []byte, lenb int, magic int) bool {
+		return lenb >= 4 && HasPrefix(b, "qres")
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "Qt Binary Resource file"
+	},
+}
+
 var matcherLnk = fileMatcher{
 	name:   "lnk",
 	minLen: 20,

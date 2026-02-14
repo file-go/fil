@@ -380,6 +380,10 @@ func mimeForDescription(desc string) string {
 		return "application/vnd.rar"
 	case strings.Contains(descLower, "ms windows htmlhelp data"):
 		return "application/vnd.ms-htmlhelp"
+	case strings.Contains(descLower, "google chrome extension"):
+		return "application/x-chrome-extension"
+	case strings.Contains(descLower, "qt binary resource file"):
+		return "application/octet-stream"
 	case strings.Contains(descLower, "microsoft word 2007+"):
 		return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 	case strings.Contains(descLower, "microsoft excel 2007+"):
