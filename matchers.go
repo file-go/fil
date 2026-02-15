@@ -92,6 +92,8 @@ var matchers = []fileMatcher{
 	matcherRegistryHive,
 	matcherPrefetch,
 	matcherPdb,
+	matcherRoslynPdb,
+	matcherMagicMgc,
 	matcherMinidump,
 	matcherThumbcache,
 	matcherRecycleBinI,

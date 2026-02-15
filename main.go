@@ -590,6 +590,10 @@ func isText(b []byte) bool {
 	if looksLikeLegacyShebangText(b) {
 		return true
 	}
+	// Some plain text files are encoded in legacy 8-bit encodings (ISO-8859/cp1252).
+	if looksLikeLegacy8BitText(b) {
+		return true
+	}
 
 	return isUTF8LikeText(b)
 }
@@ -639,6 +643,45 @@ func looksLikeLegacyShebangText(b []byte) bool {
 		}
 	}
 	return badCtrl == 0 || badCtrl*100/end <= 2
+}
+
+func looksLikeLegacy8BitText(b []byte) bool {
+	if len(b) < 16 || utf8.Valid(b) {
+		return false
+	}
+	if bytes.IndexByte(b, 0x00) >= 0 {
+		return false
+	}
+
+	end := len(b)
+	if end > 16*1024 {
+		end = 16 * 1024
+	}
+	s := b[:end]
+
+	badCtrl := 0
+	printable := 0
+	high := 0
+	for _, c := range s {
+		if c >= 0x80 {
+			high++
+			printable++
+			continue
+		}
+		if c >= 0x20 || c == '\n' || c == '\r' || c == '\t' || c == '\f' || c == '\b' {
+			printable++
+			continue
+		}
+		badCtrl++
+	}
+	if high == 0 {
+		return false
+	}
+	// Keep strict to avoid classifying binary blobs as text.
+	if badCtrl*100/end > 1 {
+		return false
+	}
+	return printable*100/end >= 90
 }
 
 func isUTF8LikeText(b []byte) bool {

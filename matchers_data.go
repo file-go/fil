@@ -266,6 +266,38 @@ var matcherPdb = fileMatcher{
 	},
 }
 
+var matcherRoslynPdb = fileMatcher{
+	name:   "roslyn-pdb",
+	minLen: 32,
+	match: func(b []byte, lenb int, magic int) bool {
+		// Portable PDB files are ECMA-335 metadata blobs with "BSJB" signature.
+		if lenb < 32 || !HasPrefix(b, "BSJB") {
+			return false
+		}
+		// Version string commonly includes "PDB v1.0".
+		end := lenb
+		if end > 128 {
+			end = 128
+		}
+		return bytes.Contains(bytes.ToLower(b[:end]), []byte("pdb v1.0"))
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "Microsoft Roslyn C# debugging symbols version 1.0"
+	},
+}
+
+var matcherMagicMgc = fileMatcher{
+	name:   "magic-mgc",
+	minLen: 4,
+	match: func(b []byte, lenb int, magic int) bool {
+		// libmagic compiled magic header (endianness variants).
+		return lenb >= 4 && (HasPrefix(b, "\x1C\x04\x1E\xF1") || HasPrefix(b, "\xF1\x1E\x04\x1C"))
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "magic binary file for file(1) cmd"
+	},
+}
+
 var matcherMinidump = fileMatcher{
 	name:   "minidump",
 	minLen: 4,
