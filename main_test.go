@@ -118,6 +118,7 @@ func TestDetectFromBytes_Fixtures(t *testing.T) {
 		{name: "qml-import-only", data: []byte("import QtQuick 2.0\nimport QtQuick.Controls 2.5\nItem {\n  id: root\n}\n"), descLike: "QML source", mime: "text/plain"},
 		{name: "ruby-script", data: []byte("require 'json'\nclass Demo\n  def run\n    puts 'ok'\n  end\nend\n"), descLike: "Ruby script", mime: "text/plain"},
 		{name: "perl-nonutf-shebang", data: append([]byte("#!/usr/bin/perl\nprint \"ok\";\n# "), 0xE9), descLike: "Perl script", mime: "text/plain"},
+		{name: "powershell-leading-comment-block", data: []byte("<#\n.SYNOPSIS\nExample\n#>\nfunction Invoke-Test {\n  param([string]$Path)\n  Write-Host $Path\n}\n"), descLike: "PowerShell script", mime: "text/plain"},
 		{name: "powershell-not-ini", data: []byte("[CmdletBinding()]\nparam(\n[string]$Name = \"x\"\n)\n"), descLike: "PowerShell script", mime: "text/plain"},
 		{name: "not-ini-weak-structure", data: []byte("[OnlySection]\nnotes line without equals\njust text\nk=v\n"), descLike: "ASCII text", mime: "text/plain"},
 		{name: "ascii-text", data: []byte("hello world"), desc: "ASCII text", mime: "text/plain"},

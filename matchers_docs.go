@@ -244,16 +244,58 @@ func looksLikeXMLDocument(b []byte) bool {
 
 	utf8Sample := bytes.TrimSpace(stripUTF8BOM(sample))
 	utf8Lower := bytes.ToLower(utf8Sample)
-	if bytes.HasPrefix(utf8Lower, []byte("<?xml")) || bytes.HasPrefix(utf8Lower, []byte("<")) {
+	if looksLikeXMLSample(utf8Lower) {
 		return true
 	}
 
 	if utf16Decoded, ok := decodeUTF16ToASCII(sample); ok {
 		decoded := bytes.ToLower(bytes.TrimSpace(utf16Decoded))
-		return bytes.HasPrefix(decoded, []byte("<?xml")) || bytes.HasPrefix(decoded, []byte("<"))
+		return looksLikeXMLSample(decoded)
 	}
 
 	return false
+}
+
+func looksLikeXMLSample(s []byte) bool {
+	s = bytes.TrimSpace(s)
+	if len(s) < 5 {
+		return false
+	}
+	if bytes.HasPrefix(s, []byte("<#")) {
+		// PowerShell block comment.
+		return false
+	}
+	if bytes.HasPrefix(s, []byte("<?xml")) {
+		return true
+	}
+
+	// Skip XML comments at the top and look for an element start.
+	if bytes.HasPrefix(s, []byte("<!--")) {
+		if end := bytes.Index(s, []byte("-->")); end > 0 && end+3 < len(s) {
+			s = bytes.TrimSpace(s[end+3:])
+		}
+	}
+
+	return startsWithXMLTag(s)
+}
+
+func startsWithXMLTag(s []byte) bool {
+	if len(s) < 3 || s[0] != '<' {
+		return false
+	}
+	c := s[1]
+	if c == '/' || c == '!' || c == '?' || c == '#' || c == ' ' || c == '\t' || c == '\n' || c == '\r' {
+		return false
+	}
+	if !isXMLNameStart(c) {
+		return false
+	}
+	close := bytes.IndexByte(s[:minInt(len(s), 512)], '>')
+	return close > 2
+}
+
+func isXMLNameStart(c byte) bool {
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_' || c == ':'
 }
 
 func hasKMLMarkers(s []byte) bool {
