@@ -403,6 +403,24 @@ func mimeForDescription(desc string) string {
 		return "image/vnd.adobe.photoshop"
 	case descLower == "pdf document", descLower == "pdf image":
 		return "application/pdf"
+	case strings.Contains(descLower, "adobe indesign document"):
+		return "application/x-indesign"
+	case strings.Contains(descLower, "adobe indesign idml package"):
+		return "application/vnd.adobe.indesign-idml-package"
+	case strings.Contains(descLower, "autocad dwg drawing"):
+		return "image/vnd.dwg"
+	case strings.Contains(descLower, "autocad dxf drawing exchange format"):
+		return "image/vnd.dxf"
+	case strings.Contains(descLower, "step cad model"):
+		return "model/step"
+	case strings.Contains(descLower, "scribus document"):
+		return "application/vnd.scribus"
+	case strings.Contains(descLower, "esri shapefile data"):
+		return "application/x-esri-shape"
+	case strings.Contains(descLower, "asprs las lidar data"):
+		return "application/vnd.las"
+	case strings.Contains(descLower, "ogc geopackage database"):
+		return "application/geopackage+sqlite3"
 	case strings.Contains(descLower, "mobipocket e-book"):
 		return "application/x-mobipocket-ebook"
 	case strings.Contains(descLower, "microsoft reader ebook"):
@@ -1096,6 +1114,9 @@ func doZip(file *os.File) string {
 
 			if lowerName == "appmanifest.xaml" || lowerName == "wmappmanifest.xml" {
 				return "Microsoft Silverlight Application"
+			}
+			if lowerName == "designmap.xml" {
+				return "Adobe InDesign IDML package"
 			}
 			if lowerName == "[content_types].xml" {
 				hasContentTypes = true
