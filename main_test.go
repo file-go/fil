@@ -136,6 +136,13 @@ func TestDetectFromBytes_Fixtures(t *testing.T) {
 			b[10], b[11] = 0x17, 0x00
 			return b
 		}(), desc: "Microsoft Outlook PST/OST message store (Unicode)", mime: "application/vnd.ms-outlook"},
+		{name: "outlook-msg", data: func() []byte {
+			b := make([]byte, 512)
+			copy(b[:8], []byte{0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1})
+			copy(b[64:], asciiToUTF16LE("__properties_version1.0"))
+			copy(b[180:], asciiToUTF16LE("__substg1.0_1000001F"))
+			return b
+		}(), desc: "Microsoft Outlook MSG message", mime: "application/vnd.ms-outlook"},
 		{name: "ms-access", data: func() []byte {
 			b := make([]byte, 256)
 			copy(b[:8], []byte{0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1})
@@ -162,6 +169,7 @@ func TestDetectFromBytes_Fixtures(t *testing.T) {
 		{name: "magic-mgc", data: append([]byte("\x1C\x04\x1E\xF1"), make([]byte, 16)...), desc: "magic binary file for file(1) cmd", mime: "application/octet-stream"},
 		{name: "pcapng", data: append([]byte("\x0A\x0D\x0D\x0A"), make([]byte, 13)...), desc: "PCAP-ng capture file", mime: "application/octet-stream"},
 		{name: "pcap", data: append([]byte("\xD4\xC3\xB2\xA1"), make([]byte, 13)...), desc: "PCAP capture file", mime: "application/octet-stream"},
+		{name: "tnef", data: append([]byte{0x78, 0x9F, 0x3E, 0x22, 0x01, 0x00}, make([]byte, 20)...), desc: "TNEF attachment data", mime: "application/ms-tnef"},
 		{name: "gettext-mo", data: append([]byte("\xDE\x12\x04\x95\x00\x00\x00\x00"), make([]byte, 24)...), desc: "GNU gettext message catalog", mime: "application/x-gettext-translation"},
 		{name: "gir-typelib", data: append([]byte("GOBJ\nMETADATA\r\n\x1A"), make([]byte, 20)...), desc: "G-IR binary database", mime: "application/octet-stream"},
 		{name: "crx", data: append([]byte("Cr24\x02\x00\x00\x00\x10\x00\x00\x00"), make([]byte, 8)...), desc: "Google Chrome extension", mime: "application/x-chrome-extension"},
@@ -428,6 +436,51 @@ func TestDetectFileType_ZipSubtypes(t *testing.T) {
 	}
 	if got := mimeForDescription(desc); got != "application/x-ipsw" {
 		t.Fatalf("ipsw mime = %q, want %q", got, "application/x-ipsw")
+	}
+
+	jar := makeZip("sample.jar", map[string]string{
+		"META-INF/MANIFEST.MF": "Manifest-Version: 1.0\n",
+		"com/example/App.class": "dummy",
+	})
+	desc, err = detectFileType(jar)
+	if err != nil {
+		t.Fatalf("detectFileType(jar) error = %v", err)
+	}
+	if desc != "Java JAR archive" {
+		t.Fatalf("jar desc = %q, want %q", desc, "Java JAR archive")
+	}
+	if got := mimeForDescription(desc); got != "application/java-archive" {
+		t.Fatalf("jar mime = %q, want %q", got, "application/java-archive")
+	}
+
+	war := makeZip("sample.war", map[string]string{
+		"WEB-INF/web.xml":      "<web-app/>",
+		"META-INF/MANIFEST.MF": "Manifest-Version: 1.0\n",
+	})
+	desc, err = detectFileType(war)
+	if err != nil {
+		t.Fatalf("detectFileType(war) error = %v", err)
+	}
+	if desc != "Java WAR archive" {
+		t.Fatalf("war desc = %q, want %q", desc, "Java WAR archive")
+	}
+	if got := mimeForDescription(desc); got != "application/java-archive" {
+		t.Fatalf("war mime = %q, want %q", got, "application/java-archive")
+	}
+
+	ear := makeZip("sample.ear", map[string]string{
+		"META-INF/application.xml": "<application/>",
+		"META-INF/MANIFEST.MF":     "Manifest-Version: 1.0\n",
+	})
+	desc, err = detectFileType(ear)
+	if err != nil {
+		t.Fatalf("detectFileType(ear) error = %v", err)
+	}
+	if desc != "Java EAR archive" {
+		t.Fatalf("ear desc = %q, want %q", desc, "Java EAR archive")
+	}
+	if got := mimeForDescription(desc); got != "application/java-archive" {
+		t.Fatalf("ear mime = %q, want %q", got, "application/java-archive")
 	}
 }
 

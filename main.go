@@ -449,6 +449,8 @@ func mimeForDescription(desc string) string {
 		return "application/x-redis-rdb"
 	case strings.Contains(descLower, "microsoft outlook pst/ost message store"):
 		return "application/vnd.ms-outlook"
+	case strings.Contains(descLower, "microsoft outlook msg message"):
+		return "application/vnd.ms-outlook"
 	case strings.Contains(descLower, "mobipocket e-book"):
 		return "application/x-mobipocket-ebook"
 	case strings.Contains(descLower, "microsoft reader ebook"):
@@ -484,8 +486,14 @@ func mimeForDescription(desc string) string {
 		return "application/x-ms-compress"
 	case strings.Contains(descLower, "rar archive data"):
 		return "application/vnd.rar"
+	case strings.Contains(descLower, "java jar archive"),
+		strings.Contains(descLower, "java war archive"),
+		strings.Contains(descLower, "java ear archive"):
+		return "application/java-archive"
 	case strings.Contains(descLower, "ms windows htmlhelp data"):
 		return "application/vnd.ms-htmlhelp"
+	case strings.Contains(descLower, "tnef attachment data"):
+		return "application/ms-tnef"
 	case strings.Contains(descLower, "google chrome extension"):
 		return "application/x-chrome-extension"
 	case strings.Contains(descLower, "android application package (apk)"):
@@ -1124,6 +1132,9 @@ func doZip(file *os.File) string {
 		hasKMZDoc := false
 		hasIPSWBuildManifest := false
 		hasIPSWRestorePlist := false
+		hasJarManifest := false
+		hasWarWebInf := false
+		hasEarAppXML := false
 
 		// Loop through the files in the ZIP archive
 		for _, zipFile := range zipReader.File {
@@ -1183,6 +1194,15 @@ func doZip(file *os.File) string {
 			if lowerName == "restore.plist" {
 				hasIPSWRestorePlist = true
 			}
+			if lowerName == "meta-inf/manifest.mf" {
+				hasJarManifest = true
+			}
+			if strings.HasPrefix(lowerName, "web-inf/") {
+				hasWarWebInf = true
+			}
+			if lowerName == "meta-inf/application.xml" {
+				hasEarAppXML = true
+			}
 			if lowerName == "[content_types].xml" {
 				hasContentTypes = true
 			}
@@ -1205,6 +1225,15 @@ func doZip(file *os.File) string {
 		}
 		if hasIPSWBuildManifest && hasIPSWRestorePlist {
 			return "Apple IPSW firmware package"
+		}
+		if hasWarWebInf {
+			return "Java WAR archive"
+		}
+		if hasEarAppXML {
+			return "Java EAR archive"
+		}
+		if hasJarManifest {
+			return "Java JAR archive"
 		}
 		if hasContentTypes && hasRels && hasXMLPayload {
 			return "Microsoft OOXML"

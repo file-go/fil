@@ -211,6 +211,17 @@ var matcherPcap = fileMatcher{
 	},
 }
 
+var matcherTNEF = fileMatcher{
+	name:   "tnef",
+	minLen: 6,
+	match: func(b []byte, lenb int, magic int) bool {
+		return lenb >= 6 && HasPrefix(b, "\x78\x9F\x3E\x22")
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "TNEF attachment data"
+	},
+}
+
 var matcherGettextMO = fileMatcher{
 	name:   "gettext-mo",
 	minLen: 28,

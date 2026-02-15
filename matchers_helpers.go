@@ -57,6 +57,27 @@ func sampleContains(b []byte, needle string, max int) bool {
 	return bytes.Contains(b[:end], []byte(needle))
 }
 
+func sampleContainsASCIIOrUTF16LE(b []byte, needle string, max int) bool {
+	end := len(b)
+	if end > max {
+		end = max
+	}
+	h := b[:end]
+	if bytes.Contains(h, []byte(needle)) {
+		return true
+	}
+	return bytes.Contains(h, asciiToUTF16LE(needle))
+}
+
+func asciiToUTF16LE(s string) []byte {
+	out := make([]byte, len(s)*2)
+	for i := 0; i < len(s); i++ {
+		out[i*2] = s[i]
+		out[i*2+1] = 0x00
+	}
+	return out
+}
+
 func hasFtypBrand(b []byte, brands ...string) bool {
 	if len(b) < 12 {
 		return false

@@ -112,6 +112,23 @@ var matcherMsAccess = fileMatcher{
 	},
 }
 
+var matcherMsg = fileMatcher{
+	name:   "msg",
+	minLen: 64,
+	match: func(b []byte, lenb int, magic int) bool {
+		if lenb < 64 || !HasPrefix(b, "\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1") {
+			return false
+		}
+		hasProps := sampleContainsASCIIOrUTF16LE(b, "__properties_version1.0", 256*1024)
+		hasSubst := sampleContainsASCIIOrUTF16LE(b, "__substg1.0_", 256*1024)
+		hasNameID := sampleContainsASCIIOrUTF16LE(b, "__nameid_version1.0", 256*1024)
+		return hasProps && (hasSubst || hasNameID)
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "Microsoft Outlook MSG message"
+	},
+}
+
 var matcherOle = fileMatcher{
 	name:   "ole",
 	minLen: 33,
