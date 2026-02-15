@@ -29,6 +29,16 @@ func detectTextSubtype(b []byte) string {
 		return "email"
 	}
 
+	if looksLikeOpenSSHPublicKey(top) {
+		return "OpenSSH public key"
+	}
+	if looksLikeKnownHosts(top) {
+		return "OpenSSH known_hosts"
+	}
+	if looksLikeAuthorizedKeys(top) {
+		return "OpenSSH authorized_keys"
+	}
+
 	if looksLikeOpenVPN(topLower) {
 		return "OpenVPN config"
 	}
@@ -163,6 +173,131 @@ func looksLikeOpenVPN(s string) bool {
 		hits++
 	}
 	return hits >= 2
+}
+
+func looksLikeOpenSSHPublicKey(s string) bool {
+	lines := strings.Split(s, "\n")
+	for _, raw := range lines {
+		line := strings.TrimSpace(raw)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			return false
+		}
+		kind := fields[0]
+		switch kind {
+		case "ssh-rsa", "ssh-ed25519", "ssh-dss", "ecdsa-sha2-nistp256", "ecdsa-sha2-nistp384", "ecdsa-sha2-nistp521",
+			"sk-ssh-ed25519@openssh.com", "sk-ecdsa-sha2-nistp256@openssh.com":
+		default:
+			return false
+		}
+		keyData := fields[1]
+		if len(keyData) < 32 {
+			return false
+		}
+		for i := 0; i < len(keyData); i++ {
+			c := keyData[i]
+			isBase64 := (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '+' || c == '/' || c == '='
+			if !isBase64 {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
+
+func looksLikeAuthorizedKeys(s string) bool {
+	lines := strings.Split(s, "\n")
+	found := false
+	for _, raw := range lines {
+		line := strings.TrimSpace(raw)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			return false
+		}
+		// authorized_keys may start with options; key type is then at fields[1].
+		start := 0
+		if !isSSHKeyType(fields[0]) {
+			start = 1
+		}
+		if len(fields) <= start+1 || !isSSHKeyType(fields[start]) {
+			return false
+		}
+		if !looksBase64Token(fields[start+1]) {
+			return false
+		}
+		found = true
+	}
+	return found
+}
+
+func looksLikeKnownHosts(s string) bool {
+	lines := strings.Split(s, "\n")
+	found := false
+	for _, raw := range lines {
+		line := strings.TrimSpace(raw)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 3 {
+			return false
+		}
+		if !looksLikeKnownHostsHostField(fields[0]) {
+			return false
+		}
+		if !isSSHKeyType(fields[1]) || !looksBase64Token(fields[2]) {
+			return false
+		}
+		found = true
+	}
+	return found
+}
+
+func looksLikeKnownHostsHostField(s string) bool {
+	if s == "" || strings.Contains(s, "=") {
+		return false
+	}
+	if strings.HasPrefix(s, "|1|") {
+		return true
+	}
+	return strings.Contains(s, ".") ||
+		strings.Contains(s, ":") ||
+		strings.Contains(s, ",") ||
+		strings.Contains(s, "[") ||
+		strings.Contains(s, "]") ||
+		strings.Contains(s, "*") ||
+		strings.Contains(s, "?")
+}
+
+func isSSHKeyType(kind string) bool {
+	switch kind {
+	case "ssh-rsa", "ssh-ed25519", "ssh-dss", "ecdsa-sha2-nistp256", "ecdsa-sha2-nistp384", "ecdsa-sha2-nistp521",
+		"sk-ssh-ed25519@openssh.com", "sk-ecdsa-sha2-nistp256@openssh.com":
+		return true
+	default:
+		return false
+	}
+}
+
+func looksBase64Token(s string) bool {
+	if len(s) < 32 {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		isBase64 := (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '+' || c == '/' || c == '='
+		if !isBase64 {
+			return false
+		}
+	}
+	return true
 }
 
 func looksLikeMbox(s string) bool {

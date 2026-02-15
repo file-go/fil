@@ -27,6 +27,17 @@ var matcherJavaClass = fileMatcher{
 	},
 }
 
+var matcherJavaSerialization = fileMatcher{
+	name:   "java-serialization",
+	minLen: 4,
+	match: func(b []byte, lenb int, magic int) bool {
+		return lenb >= 4 && HasPrefix(b, "\xAC\xED\x00\x05")
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "Java serialized object"
+	},
+}
+
 var matcherDex = fileMatcher{
 	name:   "dex",
 	minLen: 9,
@@ -35,6 +46,28 @@ var matcherDex = fileMatcher{
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
 		return "Android dex file"
+	},
+}
+
+var matcherJmod = fileMatcher{
+	name:   "jmod",
+	minLen: 4,
+	match: func(b []byte, lenb int, magic int) bool {
+		return lenb >= 4 && HasPrefix(b, "JMOD")
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "Java JMOD module"
+	},
+}
+
+var matcherHprof = fileMatcher{
+	name:   "hprof",
+	minLen: len("JAVA PROFILE "),
+	match: func(b []byte, lenb int, magic int) bool {
+		return lenb >= len("JAVA PROFILE ") && HasPrefix(b, "JAVA PROFILE ")
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "Java HPROF heap dump"
 	},
 }
 
@@ -100,12 +133,123 @@ var matcherLlvmBitcode = fileMatcher{
 
 var matcherPem = fileMatcher{
 	name:   "pem",
-	minLen: len("-----BEGIN CERTIFICATE-----"),
+	minLen: len("-----BEGIN "),
 	match: func(b []byte, lenb int, magic int) bool {
-		return HasPrefix(b, "-----BEGIN CERTIFICATE-----")
+		return detectPEMDescription(b) != ""
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
-		return "PEM certificate"
+		return detectPEMDescription(b)
+	},
+}
+
+var matcherPkcs12 = fileMatcher{
+	name:   "pkcs12",
+	minLen: 24,
+	match: func(b []byte, lenb int, magic int) bool {
+		if lenb < 24 || b[0] != 0x30 {
+			return false
+		}
+		end := lenb
+		if end > 512 {
+			end = 512
+		}
+		s := b[:end]
+		// PFX version INTEGER 3 and ContentInfo with data OID.
+		if !bytes.Contains(s, []byte{0x02, 0x01, 0x03}) {
+			return false
+		}
+		return bytes.Contains(s, []byte{0x06, 0x09, 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x07, 0x01})
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "PKCS#12 key store"
+	},
+}
+
+var matcherDerX509Cert = fileMatcher{
+	name:   "der-x509-cert",
+	minLen: 32,
+	match: func(b []byte, lenb int, magic int) bool {
+		if lenb < 32 || b[0] != 0x30 {
+			return false
+		}
+		end := lenb
+		if end > 2048 {
+			end = 2048
+		}
+		s := b[:end]
+		// Typical certificate name and extension OIDs.
+		hasName := bytes.Contains(s, []byte{0x06, 0x03, 0x55, 0x04, 0x03})
+		hasExt := bytes.Contains(s, []byte{0x06, 0x03, 0x55, 0x1D, 0x13}) ||
+			bytes.Contains(s, []byte{0x06, 0x03, 0x55, 0x1D, 0x0F}) ||
+			bytes.Contains(s, []byte{0x06, 0x03, 0x55, 0x1D, 0x11})
+		return hasName && hasExt
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "X.509 certificate (DER)"
+	},
+}
+
+var matcherPkcs8Der = fileMatcher{
+	name:   "pkcs8-der",
+	minLen: 24,
+	match: func(b []byte, lenb int, magic int) bool {
+		if lenb < 24 || b[0] != 0x30 {
+			return false
+		}
+		end := lenb
+		if end > 1024 {
+			end = 1024
+		}
+		s := b[:end]
+		verPos := bytes.Index(s, []byte{0x02, 0x01, 0x00})
+		if verPos == -1 || verPos > 16 {
+			return false
+		}
+		keyOIDPos := indexAnyOID(s, [][]byte{
+			{0x06, 0x09, 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x01, 0x01}, // rsaEncryption
+			{0x06, 0x07, 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x02, 0x01},             // id-ecPublicKey
+			{0x06, 0x03, 0x2B, 0x65, 0x70},                                     // Ed25519
+		})
+		if keyOIDPos == -1 {
+			return false
+		}
+		octetPos := bytes.IndexByte(s[keyOIDPos:], 0x04)
+		return octetPos > 0 && octetPos < 128
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "PKCS#8 private key (DER)"
+	},
+}
+
+var matcherSpkiDer = fileMatcher{
+	name:   "spki-der",
+	minLen: 20,
+	match: func(b []byte, lenb int, magic int) bool {
+		if lenb < 20 || b[0] != 0x30 {
+			return false
+		}
+		end := lenb
+		if end > 1024 {
+			end = 1024
+		}
+		s := b[:end]
+		if bytes.Contains(s, []byte{0x06, 0x03, 0x55, 0x04, 0x03}) {
+			// Likely a certificate distinguished name, not bare SPKI.
+			return false
+		}
+		keyOIDPos := indexAnyOID(s, [][]byte{
+			{0x06, 0x09, 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x01, 0x01}, // rsaEncryption
+			{0x06, 0x07, 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x02, 0x01},             // id-ecPublicKey
+			{0x06, 0x03, 0x2B, 0x65, 0x70},                                     // Ed25519
+		})
+		if keyOIDPos == -1 {
+			return false
+		}
+		bitStringPos := bytes.IndexByte(s[keyOIDPos:], 0x03)
+		return bitStringPos > 0 && bitStringPos < 128
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "X.509 SubjectPublicKeyInfo (DER public key)"
 	},
 }
 
@@ -199,6 +343,63 @@ func isDosMbrBootSector(b []byte) bool {
 		return false
 	}
 	return looksLikeFatBootSector(b) || hasLikelyMbrPartitionTable(b)
+}
+
+func detectPEMDescription(b []byte) string {
+	if len(b) == 0 {
+		return ""
+	}
+	end := len(b)
+	if end > 512 {
+		end = 512
+	}
+	s := b[:end]
+	if len(s) >= 3 && s[0] == 0xEF && s[1] == 0xBB && s[2] == 0xBF {
+		s = s[3:]
+	}
+	s = bytes.TrimLeft(s, " \t\r\n")
+	if len(s) < len("-----BEGIN ") || !bytes.HasPrefix(s, []byte("-----BEGIN ")) {
+		return ""
+	}
+
+	lineEnd := bytes.IndexByte(s, '\n')
+	if lineEnd == -1 {
+		lineEnd = len(s)
+	}
+	line := bytes.TrimRight(s[:lineEnd], "\r")
+
+	switch {
+	case bytes.Equal(line, []byte("-----BEGIN CERTIFICATE-----")):
+		return "PEM certificate"
+	case bytes.Equal(line, []byte("-----BEGIN CERTIFICATE REQUEST-----")),
+		bytes.Equal(line, []byte("-----BEGIN NEW CERTIFICATE REQUEST-----")):
+		return "PEM certificate request"
+	case bytes.Equal(line, []byte("-----BEGIN PUBLIC KEY-----")),
+		bytes.Equal(line, []byte("-----BEGIN RSA PUBLIC KEY-----")),
+		bytes.Equal(line, []byte("-----BEGIN SSH2 PUBLIC KEY-----")):
+		return "PEM public key"
+	case bytes.Equal(line, []byte("-----BEGIN PRIVATE KEY-----")),
+		bytes.Equal(line, []byte("-----BEGIN ENCRYPTED PRIVATE KEY-----")),
+		bytes.Equal(line, []byte("-----BEGIN RSA PRIVATE KEY-----")),
+		bytes.Equal(line, []byte("-----BEGIN DSA PRIVATE KEY-----")),
+		bytes.Equal(line, []byte("-----BEGIN EC PRIVATE KEY-----")):
+		return "PEM private key"
+	case bytes.Equal(line, []byte("-----BEGIN OPENSSH PRIVATE KEY-----")):
+		return "OpenSSH private key"
+	case bytes.Equal(line, []byte("-----BEGIN PKCS7-----")):
+		return "PEM PKCS#7 message"
+	default:
+		return ""
+	}
+}
+
+func indexAnyOID(s []byte, oids [][]byte) int {
+	for _, oid := range oids {
+		if i := bytes.Index(s, oid); i >= 0 {
+			return i
+		}
+	}
+	return -1
 }
 
 func looksLikeFatBootSector(b []byte) bool {

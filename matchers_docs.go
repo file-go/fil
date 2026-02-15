@@ -198,6 +198,17 @@ var matcherFb2 = fileMatcher{
 	},
 }
 
+var matcherJnlp = fileMatcher{
+	name:   "jnlp",
+	minLen: 8,
+	match: func(b []byte, lenb int, magic int) bool {
+		return looksLikeJNLPDocument(b)
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "Java Web Start JNLP file"
+	},
+}
+
 var matcherSvg = fileMatcher{
 	name:   "svg",
 	minLen: 5,
@@ -376,6 +387,34 @@ func looksLikeXMLSample(s []byte) bool {
 	}
 
 	return startsWithXMLTag(s)
+}
+
+func looksLikeJNLPDocument(b []byte) bool {
+	if len(b) < 8 {
+		return false
+	}
+
+	end := len(b)
+	if end > 8192 {
+		end = 8192
+	}
+	sample := bytes.TrimSpace(b[:end])
+	if len(sample) == 0 {
+		return false
+	}
+
+	utf8Sample := bytes.TrimSpace(stripUTF8BOM(sample))
+	utf8Lower := bytes.ToLower(utf8Sample)
+	if looksLikeXMLSample(utf8Lower) && bytes.Contains(utf8Lower, []byte("<jnlp")) {
+		return true
+	}
+
+	if utf16Decoded, ok := decodeUTF16ToASCII(sample); ok {
+		decoded := bytes.ToLower(bytes.TrimSpace(utf16Decoded))
+		return looksLikeXMLSample(decoded) && bytes.Contains(decoded, []byte("<jnlp"))
+	}
+
+	return false
 }
 
 func startsWithXMLTag(s []byte) bool {

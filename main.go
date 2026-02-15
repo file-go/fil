@@ -451,12 +451,36 @@ func mimeForDescription(desc string) string {
 		return "application/vnd.ms-outlook"
 	case strings.Contains(descLower, "microsoft outlook msg message"):
 		return "application/vnd.ms-outlook"
+	case strings.Contains(descLower, "pem certificate request"):
+		return "application/pkcs10"
+	case strings.Contains(descLower, "pem certificate"),
+		strings.Contains(descLower, "pem private key"),
+		strings.Contains(descLower, "pem public key"),
+		strings.Contains(descLower, "openssh private key"),
+		strings.Contains(descLower, "pem pkcs#7 message"):
+		return "application/x-pem-file"
+	case strings.Contains(descLower, "pkcs#12 key store"):
+		return "application/x-pkcs12"
+	case strings.Contains(descLower, "x.509 certificate (der)"):
+		return "application/pkix-cert"
+	case strings.Contains(descLower, "pkcs#8 private key (der)"):
+		return "application/pkcs8"
+	case strings.Contains(descLower, "x.509 subjectpublickeyinfo (der public key)"):
+		return "application/pkix-key"
+	case strings.Contains(descLower, "java serialized object"):
+		return "application/x-java-serialized-object"
+	case strings.Contains(descLower, "java jmod module"):
+		return "application/x-java-jmod"
+	case strings.Contains(descLower, "java hprof heap dump"):
+		return "application/x-java-hprof"
 	case strings.Contains(descLower, "mobipocket e-book"):
 		return "application/x-mobipocket-ebook"
 	case strings.Contains(descLower, "microsoft reader ebook"):
 		return "application/x-ms-reader"
 	case strings.Contains(descLower, "fictionbook e-book"):
 		return "application/fb2+xml"
+	case strings.Contains(descLower, "java web start jnlp file"):
+		return "application/x-java-jnlp-file"
 	case strings.Contains(descLower, "der encoded pkcs#7 signed data"):
 		return "application/pkcs7-signature"
 	case strings.Contains(descLower, "java jks keystore"),
