@@ -33,8 +33,16 @@ func detectTextSubtype(b []byte) string {
 		return "Python script"
 	}
 
+	if strings.HasPrefix(top, "#!/usr/bin/ruby") || strings.HasPrefix(top, "#!/usr/bin/env ruby") {
+		return "Ruby script"
+	}
+
 	if looksLikeQML(topLower) {
 		return "QML source"
+	}
+
+	if looksLikeRuby(topLower) {
+		return "Ruby script"
 	}
 
 	if looksLikePython(topLower) {
@@ -230,6 +238,46 @@ func looksLikeQML(s string) bool {
 		hits++
 	}
 	return hits >= 2
+}
+
+func looksLikeRuby(s string) bool {
+	hits := 0
+	rubySpecific := 0
+
+	if strings.Contains(s, "\nrequire '") || strings.Contains(s, "\nrequire \"") {
+		hits++
+		rubySpecific++
+	}
+	if strings.Contains(s, "\nmodule ") {
+		hits++
+	}
+	if strings.Contains(s, "\nclass ") {
+		hits++
+	}
+	if strings.Contains(s, "\ndef ") {
+		hits++
+	}
+	if strings.Contains(s, " do |") {
+		hits++
+		rubySpecific++
+	}
+	if strings.Contains(s, "\nputs ") || strings.Contains(s, "\nattr_accessor ") {
+		hits++
+		rubySpecific++
+	}
+	if strings.Contains(s, "\nunless ") || strings.Contains(s, "\nelsif ") {
+		hits++
+		rubySpecific++
+	}
+	if strings.Contains(s, "\nbegin\n") && strings.Contains(s, "\nrescue ") {
+		hits++
+		rubySpecific++
+	}
+	if strings.Contains(s, "\nend\n") || strings.HasSuffix(strings.TrimSpace(s), "end") {
+		hits++
+	}
+
+	return hits >= 3 && rubySpecific >= 1
 }
 
 func looksLikeCLang(s string, sLower string) string {

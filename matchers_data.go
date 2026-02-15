@@ -135,6 +135,29 @@ var matcherPcap = fileMatcher{
 	},
 }
 
+var matcherGettextMO = fileMatcher{
+	name:   "gettext-mo",
+	minLen: 28,
+	match: func(b []byte, lenb int, magic int) bool {
+		if lenb < 28 {
+			return false
+		}
+		// GNU gettext MO magic (little-endian and big-endian encodings).
+		if !(HasPrefix(b, "\xDE\x12\x04\x95") || HasPrefix(b, "\x95\x04\x12\xDE")) {
+			return false
+		}
+		// Revision is typically 0.0 or 1.0.
+		revision := peekLe(b[4:], 4)
+		if HasPrefix(b, "\x95\x04\x12\xDE") {
+			revision = peekBe(b[4:], 4)
+		}
+		return revision == 0 || revision == 1
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "GNU gettext message catalog"
+	},
+}
+
 var matcherCrx = fileMatcher{
 	name:   "crx",
 	minLen: 12,

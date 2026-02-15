@@ -92,6 +92,7 @@ var matchers = []fileMatcher{
 	matcherRecycleBinI,
 	matcherPcapng,
 	matcherPcap,
+	matcherGettextMO,
 	matcherCrx,
 	matcherRcc,
 	matcherFlac,

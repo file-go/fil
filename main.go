@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -249,10 +250,51 @@ func detectFromBytes(contentByte []byte, filename string, file *os.File) (string
 
 	for _, matcher := range matchers {
 		if lenb >= matcher.minLen && matcher.match(contentByte, lenb, magic) {
+			if matcher.name == "data" {
+				if desc := glibcLocaleDescriptionForPath(filename, contentByte); desc != "" {
+					return desc, nil
+				}
+			}
 			return matcher.describe(contentByte, lenb, magic, file), nil
 		}
 	}
 	return "", nil
+}
+
+func glibcLocaleDescriptionForPath(filename string, b []byte) string {
+	if filename == "" || isText(b) {
+		return ""
+	}
+	p := strings.ToLower(strings.ReplaceAll(filename, "\\", "/"))
+	if !strings.Contains(p, "/usr/lib/locale/") {
+		return ""
+	}
+
+	base := strings.ToLower(path.Base(p))
+	category := ""
+	switch {
+	case base == "sys_lc_messages":
+		category = "LC_MESSAGES"
+	case strings.HasPrefix(base, "lc_"):
+		candidate := strings.ToUpper(base)
+		if isKnownLocaleCategory(candidate) {
+			category = candidate
+		}
+	}
+	if category == "" {
+		return ""
+	}
+	return "glibc locale file " + category
+}
+
+func isKnownLocaleCategory(s string) bool {
+	switch s {
+	case "LC_ADDRESS", "LC_COLLATE", "LC_CTYPE", "LC_IDENTIFICATION", "LC_MEASUREMENT",
+		"LC_MESSAGES", "LC_MONETARY", "LC_NAME", "LC_NUMERIC", "LC_PAPER", "LC_TELEPHONE", "LC_TIME":
+		return true
+	default:
+		return false
+	}
 }
 
 func handleStdin(brief bool, mimeOutput bool, jsonOutput bool) {
@@ -487,6 +529,8 @@ func mimeForDescription(desc string) string {
 		return "video/mp2t"
 	case strings.Contains(descLower, "asf media file"):
 		return "video/x-ms-asf"
+	case strings.Contains(descLower, "gnu gettext message catalog"):
+		return "application/x-gettext-translation"
 	case strings.Contains(descLower, "ogg opus audio"),
 		strings.Contains(descLower, "ogg vorbis audio"),
 		strings.Contains(descLower, "ogg flac audio"),

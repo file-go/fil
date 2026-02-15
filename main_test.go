@@ -73,6 +73,7 @@ func TestDetectFromBytes_Fixtures(t *testing.T) {
 		{name: "chm", data: append([]byte("ITSF"), make([]byte, 12)...), desc: "MS Windows HtmlHelp Data", mime: "application/vnd.ms-htmlhelp"},
 		{name: "pcapng", data: append([]byte("\x0A\x0D\x0D\x0A"), make([]byte, 13)...), desc: "PCAP-ng capture file", mime: "application/octet-stream"},
 		{name: "pcap", data: append([]byte("\xD4\xC3\xB2\xA1"), make([]byte, 13)...), desc: "PCAP capture file", mime: "application/octet-stream"},
+		{name: "gettext-mo", data: append([]byte("\xDE\x12\x04\x95\x00\x00\x00\x00"), make([]byte, 24)...), desc: "GNU gettext message catalog", mime: "application/x-gettext-translation"},
 		{name: "crx", data: append([]byte("Cr24\x02\x00\x00\x00\x10\x00\x00\x00"), make([]byte, 8)...), desc: "Google Chrome extension", mime: "application/x-chrome-extension"},
 		{name: "rcc", data: append([]byte("qres"), make([]byte, 12)...), desc: "Qt Binary Resource file", mime: "application/octet-stream"},
 		{name: "flac", data: append([]byte("fLaC"), make([]byte, 13)...), desc: "FLAC audio format", mime: "application/octet-stream"},
@@ -95,6 +96,7 @@ func TestDetectFromBytes_Fixtures(t *testing.T) {
 		{name: "json", data: []byte("{\"a\":1,\"b\":2}"), desc: "JSON data", mime: "application/octet-stream"},
 		{name: "qml", data: []byte("import QtQuick 2.0\nItem {\n  property int count: 0\n}\n"), descLike: "ASCII text, QML source", mime: "text/plain"},
 		{name: "qml-import-only", data: []byte("import QtQuick 2.0\nimport QtQuick.Controls 2.5\nItem {\n  id: root\n}\n"), descLike: "QML source", mime: "text/plain"},
+		{name: "ruby-script", data: []byte("require 'json'\nclass Demo\n  def run\n    puts 'ok'\n  end\nend\n"), descLike: "Ruby script", mime: "text/plain"},
 		{name: "powershell-not-ini", data: []byte("[CmdletBinding()]\nparam(\n[string]$Name = \"x\"\n)\n"), descLike: "PowerShell script", mime: "text/plain"},
 		{name: "not-ini-weak-structure", data: []byte("[OnlySection]\nnotes line without equals\njust text\nk=v\n"), descLike: "ASCII text", mime: "text/plain"},
 		{name: "ascii-text", data: []byte("hello world"), desc: "ASCII text", mime: "text/plain"},
@@ -308,5 +310,21 @@ func TestDetectFileType_DebianArSubtype(t *testing.T) {
 
 	if got := mimeForDescription(desc); got != "application/vnd.debian.binary-package" {
 		t.Fatalf("deb mime = %q, want %q", got, "application/vnd.debian.binary-package")
+	}
+}
+
+func TestDetectFromBytes_GlibcLocalePathFallback(t *testing.T) {
+	t.Parallel()
+
+	bin := []byte{0x00, 0x01, 0xB0, 0x7F, 0x00, 0x10}
+	got, err := detectFromBytes(bin, "/usr/lib/locale/en_GB.utf8/LC_ADDRESS", nil)
+	if err != nil {
+		t.Fatalf("detectFromBytes(glibc locale) error = %v", err)
+	}
+	if got != "glibc locale file LC_ADDRESS" {
+		t.Fatalf("detectFromBytes(glibc locale) = %q, want %q", got, "glibc locale file LC_ADDRESS")
+	}
+	if mime := mimeForDescription(got); mime != "application/octet-stream" {
+		t.Fatalf("mimeForDescription(glibc locale) = %q, want %q", mime, "application/octet-stream")
 	}
 }
