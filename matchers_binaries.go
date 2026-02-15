@@ -1,6 +1,9 @@
 package main
 
-import "os"
+import (
+	"bytes"
+	"os"
+)
 
 var matcherElf = fileMatcher{
 	name:   "elf",
@@ -79,6 +82,32 @@ var matcherPem = fileMatcher{
 	},
 }
 
+var matcherPkcs7Der = fileMatcher{
+	name:   "pkcs7-der",
+	minLen: 20,
+	match: func(b []byte, lenb int, magic int) bool {
+		if lenb < 20 || b[0] != 0x30 {
+			return false
+		}
+		// OID 1.2.840.113549.1.7.2 (signedData) inside ContentInfo.
+		return bytes.Contains(b[:minInt(lenb, 512)], []byte{0x06, 0x09, 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x07, 0x02})
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "DER Encoded PKCS#7 Signed Data"
+	},
+}
+
+var matcherCrdaRegdb = fileMatcher{
+	name:   "crda-regdb",
+	minLen: 8,
+	match: func(b []byte, lenb int, magic int) bool {
+		return lenb >= 8 && HasPrefix(b, "RGDB")
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "CRDA wireless regulatory database file"
+	},
+}
+
 var matcherPe = fileMatcher{
 	name:   "pe",
 	minLen: 64,
@@ -88,6 +117,25 @@ var matcherPe = fileMatcher{
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
 		return describePE(b, magic)
+	},
+}
+
+var matcherCoffObject = fileMatcher{
+	name:   "coff-object",
+	minLen: 20,
+	match: func(b []byte, lenb int, magic int) bool {
+		return looksLikeCoffObject(b)
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		machine := peekLe(b[:2], 2)
+		switch machine {
+		case 0x8664:
+			return "x86-64 COFF object file"
+		case 0x14c:
+			return "Intel i386 COFF object file"
+		default:
+			return "COFF object file"
+		}
 	},
 }
 
@@ -179,4 +227,28 @@ func hasLikelyMbrPartitionTable(b []byte) bool {
 	}
 
 	return nonEmpty
+}
+
+func looksLikeCoffObject(b []byte) bool {
+	if len(b) < 20 {
+		return false
+	}
+	machine := peekLe(b[:2], 2)
+	if machine != 0x14c && machine != 0x8664 {
+		return false
+	}
+	sections := peekLe(b[2:], 2)
+	if sections <= 0 || sections > 128 {
+		return false
+	}
+	// COFF object files have no optional header.
+	if peekLe(b[16:], 2) != 0 {
+		return false
+	}
+	ptrSym := peekLe(b[8:], 4)
+	numSym := peekLe(b[12:], 4)
+	if ptrSym < 20 || numSym <= 0 {
+		return false
+	}
+	return true
 }

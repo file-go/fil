@@ -399,6 +399,8 @@ func mimeForDescription(desc string) string {
 		return "image/vnd.adobe.photoshop"
 	case descLower == "pdf document", descLower == "pdf image":
 		return "application/pdf"
+	case strings.Contains(descLower, "der encoded pkcs#7 signed data"):
+		return "application/pkcs7-signature"
 	case strings.Contains(descLower, "7zip archive data"):
 		return "application/x-7z-compressed"
 	case strings.Contains(descLower, "zip archive"):
@@ -427,6 +429,8 @@ func mimeForDescription(desc string) string {
 		return "application/vnd.ms-htmlhelp"
 	case strings.Contains(descLower, "google chrome extension"):
 		return "application/x-chrome-extension"
+	case strings.Contains(descLower, "coff object file"):
+		return "application/x-object"
 	case strings.Contains(descLower, "qt binary resource file"):
 		return "application/octet-stream"
 	case strings.Contains(descLower, "microsoft word 2007+"):
