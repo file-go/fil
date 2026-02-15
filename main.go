@@ -395,6 +395,10 @@ func mimeForDescription(desc string) string {
 		return "image/x-icon"
 	case descLower == "ms windows cursor resource":
 		return "image/x-icon"
+	case descLower == "opentype font data":
+		return "font/otf"
+	case descLower == "embedded opentype font":
+		return "application/vnd.ms-fontobject"
 	case descLower == "photoshop document":
 		return "image/vnd.adobe.photoshop"
 	case descLower == "pdf document", descLower == "pdf image":
@@ -535,6 +539,8 @@ func mimeForDescription(desc string) string {
 		return "video/x-ms-asf"
 	case strings.Contains(descLower, "gnu gettext message catalog"):
 		return "application/x-gettext-translation"
+	case strings.Contains(descLower, "g-ir binary database"):
+		return "application/octet-stream"
 	case strings.Contains(descLower, "ogg opus audio"),
 		strings.Contains(descLower, "ogg vorbis audio"),
 		strings.Contains(descLower, "ogg flac audio"),
@@ -579,6 +585,11 @@ func isText(b []byte) bool {
 	if looksLikeLegacyBatchText(b) {
 		return true
 	}
+	// Legacy-encoded scripts with shebangs (for example perl/shell) may be
+	// non-UTF but still should be classified as text.
+	if looksLikeLegacyShebangText(b) {
+		return true
+	}
 
 	return isUTF8LikeText(b)
 }
@@ -599,6 +610,35 @@ func looksLikeLegacyBatchText(b []byte) bool {
 
 	topLower := "\n" + strings.ToLower(string(b[:end]))
 	return looksLikeBatch(topLower)
+}
+
+func looksLikeLegacyShebangText(b []byte) bool {
+	if len(b) < 4 || utf8.Valid(b) {
+		return false
+	}
+	if !bytes.HasPrefix(b, []byte("#!")) {
+		return false
+	}
+	if bytes.IndexByte(b, 0x00) >= 0 {
+		return false
+	}
+
+	end := len(b)
+	if end > 4096 {
+		end = 4096
+	}
+	headLower := strings.ToLower(string(b[:end]))
+	if !(strings.Contains(headLower, "perl") || strings.Contains(headLower, "/sh") || strings.Contains(headLower, "bash")) {
+		return false
+	}
+
+	badCtrl := 0
+	for _, c := range b[:end] {
+		if c < 0x20 && c != '\n' && c != '\r' && c != '\t' && c != '\f' && c != '\b' {
+			badCtrl++
+		}
+	}
+	return badCtrl == 0 || badCtrl*100/end <= 2
 }
 
 func isUTF8LikeText(b []byte) bool {

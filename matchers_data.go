@@ -158,6 +158,17 @@ var matcherGettextMO = fileMatcher{
 	},
 }
 
+var matcherGIRTypelib = fileMatcher{
+	name:   "gir-typelib",
+	minLen: len("GOBJ\nMETADATA\r\n\x1A"),
+	match: func(b []byte, lenb int, magic int) bool {
+		return lenb >= len("GOBJ\nMETADATA\r\n\x1A") && HasPrefix(b, "GOBJ\nMETADATA\r\n\x1A")
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "G-IR binary database"
+	},
+}
+
 var matcherCrx = fileMatcher{
 	name:   "crx",
 	minLen: 12,

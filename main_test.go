@@ -53,6 +53,19 @@ func TestDetectFromBytes_Fixtures(t *testing.T) {
 		{name: "flv", data: []byte("FLV"), desc: "FLV video file", mime: "application/octet-stream"},
 		{name: "woff", data: []byte("wOFF"), desc: "WOFF font", mime: "application/octet-stream"},
 		{name: "woff2", data: []byte("wOF2"), desc: "WOFF2 font", mime: "application/octet-stream"},
+		{name: "otf", data: []byte("OTTO\x00\x01\x00\x00"), desc: "OpenType font data", mime: "font/otf"},
+		{name: "eot", data: func() []byte {
+			b := make([]byte, 40)
+			// EOT version 0x00010000
+			b[8] = 0x00
+			b[9] = 0x00
+			b[10] = 0x01
+			b[11] = 0x00
+			// EOT magic 'LP' at offset 34.
+			b[34] = 0x4C
+			b[35] = 0x50
+			return b
+		}(), desc: "Embedded OpenType font", mime: "application/vnd.ms-fontobject"},
 		{name: "bmp", data: append([]byte{'B', 'M', 0, 0, 0, 0, 0, 0, 0, 0}, make([]byte, 41)...), desc: "BMP image", mime: "image/bmp"},
 		{name: "wmf-placeable", data: append([]byte("\xD7\xCD\xC6\x9A"), make([]byte, 16)...), desc: "Windows metafile", mime: "image/wmf"},
 		{name: "pdf", data: append([]byte("%PDF"), make([]byte, 47)...), desc: "PDF document", mime: "application/pdf"},
@@ -78,6 +91,7 @@ func TestDetectFromBytes_Fixtures(t *testing.T) {
 		{name: "pcapng", data: append([]byte("\x0A\x0D\x0D\x0A"), make([]byte, 13)...), desc: "PCAP-ng capture file", mime: "application/octet-stream"},
 		{name: "pcap", data: append([]byte("\xD4\xC3\xB2\xA1"), make([]byte, 13)...), desc: "PCAP capture file", mime: "application/octet-stream"},
 		{name: "gettext-mo", data: append([]byte("\xDE\x12\x04\x95\x00\x00\x00\x00"), make([]byte, 24)...), desc: "GNU gettext message catalog", mime: "application/x-gettext-translation"},
+		{name: "gir-typelib", data: append([]byte("GOBJ\nMETADATA\r\n\x1A"), make([]byte, 20)...), desc: "G-IR binary database", mime: "application/octet-stream"},
 		{name: "crx", data: append([]byte("Cr24\x02\x00\x00\x00\x10\x00\x00\x00"), make([]byte, 8)...), desc: "Google Chrome extension", mime: "application/x-chrome-extension"},
 		{name: "rcc", data: append([]byte("qres"), make([]byte, 12)...), desc: "Qt Binary Resource file", mime: "application/octet-stream"},
 		{name: "flac", data: append([]byte("fLaC"), make([]byte, 13)...), desc: "FLAC audio format", mime: "application/octet-stream"},
@@ -101,6 +115,7 @@ func TestDetectFromBytes_Fixtures(t *testing.T) {
 		{name: "qml", data: []byte("import QtQuick 2.0\nItem {\n  property int count: 0\n}\n"), descLike: "ASCII text, QML source", mime: "text/plain"},
 		{name: "qml-import-only", data: []byte("import QtQuick 2.0\nimport QtQuick.Controls 2.5\nItem {\n  id: root\n}\n"), descLike: "QML source", mime: "text/plain"},
 		{name: "ruby-script", data: []byte("require 'json'\nclass Demo\n  def run\n    puts 'ok'\n  end\nend\n"), descLike: "Ruby script", mime: "text/plain"},
+		{name: "perl-nonutf-shebang", data: append([]byte("#!/usr/bin/perl\nprint \"ok\";\n# "), 0xE9), descLike: "Perl script", mime: "text/plain"},
 		{name: "powershell-not-ini", data: []byte("[CmdletBinding()]\nparam(\n[string]$Name = \"x\"\n)\n"), descLike: "PowerShell script", mime: "text/plain"},
 		{name: "not-ini-weak-structure", data: []byte("[OnlySection]\nnotes line without equals\njust text\nk=v\n"), descLike: "ASCII text", mime: "text/plain"},
 		{name: "ascii-text", data: []byte("hello world"), desc: "ASCII text", mime: "text/plain"},
