@@ -421,6 +421,12 @@ func mimeForDescription(desc string) string {
 		return "application/vnd.las"
 	case strings.Contains(descLower, "ogc geopackage database"):
 		return "application/geopackage+sqlite3"
+	case strings.Contains(descLower, "microsoft access database"):
+		return "application/x-msaccess"
+	case strings.Contains(descLower, "dbase dbf database"):
+		return "application/x-dbf"
+	case strings.Contains(descLower, "redis database dump"):
+		return "application/x-redis-rdb"
 	case strings.Contains(descLower, "mobipocket e-book"):
 		return "application/x-mobipocket-ebook"
 	case strings.Contains(descLower, "microsoft reader ebook"):

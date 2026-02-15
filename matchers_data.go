@@ -72,6 +72,60 @@ var matcherPgCustomDump = fileMatcher{
 	},
 }
 
+var matcherRedisRdb = fileMatcher{
+	name:   "redis-rdb",
+	minLen: 9,
+	match: func(b []byte, lenb int, magic int) bool {
+		if lenb < 9 || !HasPrefix(b, "REDIS") {
+			return false
+		}
+		for i := 5; i < 9; i++ {
+			if b[i] < '0' || b[i] > '9' {
+				return false
+			}
+		}
+		return true
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "Redis database dump"
+	},
+}
+
+var matcherDbf = fileMatcher{
+	name:   "dbf",
+	minLen: 33,
+	match: func(b []byte, lenb int, magic int) bool {
+		if lenb < 33 {
+			return false
+		}
+		switch b[0] {
+		case 0x02, 0x03, 0x04, 0x05, 0x30, 0x31, 0x32, 0x43, 0x63, 0x83, 0x8B, 0xCB, 0xF5:
+		default:
+			return false
+		}
+		month := b[2]
+		day := b[3]
+		if month < 1 || month > 12 || day < 1 || day > 31 {
+			return false
+		}
+		headerLen := peekLe(b[8:], 2)
+		recordLen := peekLe(b[10:], 2)
+		if headerLen < 33 || recordLen <= 0 {
+			return false
+		}
+		if headerLen%32 != 1 {
+			return false
+		}
+		if headerLen <= lenb && b[headerLen-1] != 0x0D {
+			return false
+		}
+		return true
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "dBase DBF database"
+	},
+}
+
 var matcherSqlite = fileMatcher{
 	name:   "sqlite",
 	minLen: 17,

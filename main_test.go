@@ -96,6 +96,27 @@ func TestDetectFromBytes_Fixtures(t *testing.T) {
 		{name: "chm", data: append([]byte("ITSF"), make([]byte, 12)...), desc: "MS Windows HtmlHelp Data", mime: "application/vnd.ms-htmlhelp"},
 		{name: "coff-i386", data: []byte{0x4C, 0x01, 0x06, 0x00, 0, 0, 0, 0, 0x40, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0, 0, 0, 0}, desc: "Intel i386 COFF object file", mime: "application/x-object"},
 		{name: "coff-x64", data: []byte{0x64, 0x86, 0x08, 0x00, 0, 0, 0, 0, 0x80, 0x00, 0x00, 0x00, 0x14, 0x00, 0x00, 0x00, 0, 0, 0, 0}, desc: "x86-64 COFF object file", mime: "application/x-object"},
+		{name: "redis-rdb", data: append([]byte("REDIS0011"), make([]byte, 24)...), desc: "Redis database dump", mime: "application/x-redis-rdb"},
+		{name: "dbf", data: func() []byte {
+			b := make([]byte, 65)
+			b[0] = 0x03 // dBASE III
+			b[1] = 0x24 // YY
+			b[2] = 0x01 // MM
+			b[3] = 0x1A // DD
+			// header length = 65 (0x41)
+			b[8], b[9] = 0x41, 0x00
+			// record length = 32
+			b[10], b[11] = 0x20, 0x00
+			// header terminator at headerLen-1
+			b[64] = 0x0D
+			return b
+		}(), desc: "dBase DBF database", mime: "application/x-dbf"},
+		{name: "ms-access", data: func() []byte {
+			b := make([]byte, 256)
+			copy(b[:8], []byte{0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1})
+			copy(b[64:], []byte("Standard Jet DB"))
+			return b
+		}(), desc: "Microsoft Access database", mime: "application/x-msaccess"},
 		{name: "shapefile", data: func() []byte {
 			b := make([]byte, 100)
 			copy(b[0:4], []byte{0x00, 0x00, 0x27, 0x0A})

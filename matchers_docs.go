@@ -93,6 +93,25 @@ var matcherMsi = fileMatcher{
 	},
 }
 
+var matcherMsAccess = fileMatcher{
+	name:   "ms-access",
+	minLen: 64,
+	match: func(b []byte, lenb int, magic int) bool {
+		if lenb < 64 || !HasPrefix(b, "\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1") {
+			return false
+		}
+		end := lenb
+		if end > 8192 {
+			end = 8192
+		}
+		h := b[:end]
+		return bytes.Contains(h, []byte("Standard Jet DB")) || bytes.Contains(h, []byte("Standard ACE DB"))
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "Microsoft Access database"
+	},
+}
+
 var matcherOle = fileMatcher{
 	name:   "ole",
 	minLen: 33,
