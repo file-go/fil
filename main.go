@@ -403,6 +403,20 @@ func mimeForDescription(desc string) string {
 		return "image/vnd.adobe.photoshop"
 	case descLower == "pdf document", descLower == "pdf image":
 		return "application/pdf"
+	case strings.Contains(descLower, "xar archive (apple installer package)"):
+		return "application/x-xar"
+	case strings.Contains(descLower, "apple bom archive"):
+		return "application/x-apple-bom"
+	case strings.Contains(descLower, "appledouble encoded file"):
+		return "application/applefile"
+	case strings.Contains(descLower, "apple property list"):
+		return "application/x-plist"
+	case strings.Contains(descLower, "apple ds_store metadata"):
+		return "application/octet-stream"
+	case strings.Contains(descLower, "apple apfs filesystem"):
+		return "application/octet-stream"
+	case strings.Contains(descLower, "apple hfs/hfs+ filesystem"):
+		return "application/octet-stream"
 	case strings.Contains(descLower, "adobe indesign document"):
 		return "application/x-indesign"
 	case strings.Contains(descLower, "adobe indesign idml package"):

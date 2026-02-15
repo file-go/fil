@@ -76,6 +76,21 @@ func TestDetectFromBytes_Fixtures(t *testing.T) {
 			return b
 		}(), desc: "Mobipocket e-book", mime: "application/x-mobipocket-ebook"},
 		{name: "lit", data: append([]byte("ITOLITLS"), make([]byte, 24)...), desc: "Microsoft Reader eBook", mime: "application/x-ms-reader"},
+		{name: "xar", data: append([]byte("xar!"), make([]byte, 32)...), desc: "XAR archive (Apple installer package)", mime: "application/x-xar"},
+		{name: "apple-bom", data: append([]byte("BOMStore"), make([]byte, 16)...), desc: "Apple BOM archive", mime: "application/x-apple-bom"},
+		{name: "appledouble", data: append([]byte("\x00\x05\x16\x07"), make([]byte, 16)...), desc: "AppleDouble encoded file", mime: "application/applefile"},
+		{name: "plist-binary", data: append([]byte("bplist00"), make([]byte, 16)...), desc: "Apple property list", mime: "application/x-plist"},
+		{name: "ds-store", data: append([]byte{0x00, 0x00, 0x00, 0x01, 'B', 'u', 'd', '1'}, make([]byte, 20)...), desc: "Apple DS_Store metadata", mime: "application/octet-stream"},
+		{name: "apfs", data: func() []byte {
+			b := make([]byte, 64)
+			copy(b[32:36], []byte("NXSB"))
+			return b
+		}(), desc: "Apple APFS filesystem", mime: "application/octet-stream"},
+		{name: "hfs", data: func() []byte {
+			b := make([]byte, 1100)
+			copy(b[1024:1026], []byte("H+"))
+			return b
+		}(), desc: "Apple HFS/HFS+ filesystem", mime: "application/octet-stream"},
 		{name: "dwg", data: append([]byte("AC1027"), make([]byte, 18)...), desc: "AutoCAD DWG drawing", mime: "image/vnd.dwg"},
 		{name: "tiff", data: append([]byte{0x49, 0x49, 0x2A, 0x00}, make([]byte, 13)...), desc: "TIFF image data", mime: "image/tiff"},
 		{name: "mp3-id3", data: append([]byte("ID3"), make([]byte, 14)...), desc: "MP3 audio file", mime: "application/octet-stream"},
@@ -160,6 +175,7 @@ func TestDetectFromBytes_Fixtures(t *testing.T) {
 		{name: "dxf", data: []byte("0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1027\n0\nENDSEC\n0\nEOF\n"), desc: "AutoCAD DXF drawing exchange format", mime: "image/vnd.dxf"},
 		{name: "step", data: []byte("ISO-10303-21;\nHEADER;\nFILE_DESCRIPTION(('demo'),'2;1');\nENDSEC;\nDATA;\nENDSEC;\nEND-ISO-10303-21;\n"), desc: "STEP CAD model", mime: "model/step"},
 		{name: "fb2", data: []byte("<?xml version=\"1.0\"?><FictionBook><description></description><body></body></FictionBook>"), desc: "FictionBook e-book", mime: "application/fb2+xml"},
+		{name: "plist-xml", data: []byte("<?xml version=\"1.0\"?><!DOCTYPE plist PUBLIC \"-//Apple Computer//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\"><plist version=\"1.0\"></plist>"), desc: "Apple property list", mime: "application/x-plist"},
 		{name: "xml-utf8-bom", data: []byte("\xEF\xBB\xBF<?xml version=\"1.0\"?><x/>"), desc: "XML document", mime: "application/octet-stream"},
 		{name: "xml-utf16le-bom", data: []byte("\xFF\xFE<\x00?\x00x\x00m\x00l\x00 \x00v\x00e\x00r\x00s\x00i\x00o\x00n\x00=\x00\"\x001\x00.\x000\x00\"\x00?\x00>\x00<\x00x\x00/\x00>\x00"), desc: "XML document", mime: "application/octet-stream"},
 		{name: "json", data: []byte("{\"a\":1,\"b\":2}"), desc: "JSON data", mime: "application/octet-stream"},
