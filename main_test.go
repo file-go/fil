@@ -79,6 +79,7 @@ func TestDetectFromBytes_Fixtures(t *testing.T) {
 		}(), desc: "Mobipocket e-book", mime: "application/x-mobipocket-ebook"},
 		{name: "lit", data: append([]byte("ITOLITLS"), make([]byte, 24)...), desc: "Microsoft Reader eBook", mime: "application/x-ms-reader"},
 		{name: "xar", data: append([]byte("xar!"), make([]byte, 32)...), desc: "XAR archive (Apple installer package)", mime: "application/x-xar"},
+		{name: "rpm", data: append([]byte("\xED\xAB\xEE\xDB\x03\x00\x00\x00"), make([]byte, 120)...), desc: "RPM package data", mime: "application/x-rpm"},
 		{name: "apple-bom", data: append([]byte("BOMStore"), make([]byte, 16)...), desc: "Apple BOM archive", mime: "application/x-apple-bom"},
 		{name: "appledouble", data: append([]byte("\x00\x05\x16\x07"), make([]byte, 16)...), desc: "AppleDouble encoded file", mime: "application/applefile"},
 		{name: "plist-binary", data: append([]byte("bplist00"), make([]byte, 16)...), desc: "Apple property list", mime: "application/x-plist"},
@@ -93,6 +94,7 @@ func TestDetectFromBytes_Fixtures(t *testing.T) {
 			copy(b[1024:1026], []byte("H+"))
 			return b
 		}(), desc: "Apple HFS/HFS+ filesystem", mime: "application/octet-stream"},
+		{name: "ewf", data: append([]byte("EVF\x09\x0D\x0A\xFF\x00"), make([]byte, 24)...), desc: "Expert Witness Compression Format (EWF) image", mime: "application/x-ewf"},
 		{name: "dwg", data: append([]byte("AC1027"), make([]byte, 18)...), desc: "AutoCAD DWG drawing", mime: "image/vnd.dwg"},
 		{name: "tiff", data: append([]byte{0x49, 0x49, 0x2A, 0x00}, make([]byte, 13)...), desc: "TIFF image data", mime: "image/tiff"},
 		{name: "mp3-id3", data: append([]byte("ID3"), make([]byte, 14)...), desc: "MP3 audio file", mime: "application/octet-stream"},
@@ -481,6 +483,36 @@ func TestDetectFileType_ZipSubtypes(t *testing.T) {
 	}
 	if got := mimeForDescription(desc); got != "application/java-archive" {
 		t.Fatalf("ear mime = %q, want %q", got, "application/java-archive")
+	}
+
+	nupkg := makeZip("sample.nupkg", map[string]string{
+		"[Content_Types].xml": "<Types/>",
+		"sample.nuspec":       "<package></package>",
+	})
+	desc, err = detectFileType(nupkg)
+	if err != nil {
+		t.Fatalf("detectFileType(nupkg) error = %v", err)
+	}
+	if desc != "NuGet package (NUPKG)" {
+		t.Fatalf("nupkg desc = %q, want %q", desc, "NuGet package (NUPKG)")
+	}
+	if got := mimeForDescription(desc); got != "application/vnd.nuget.package" {
+		t.Fatalf("nupkg mime = %q, want %q", got, "application/vnd.nuget.package")
+	}
+
+	vsix := makeZip("sample.vsix", map[string]string{
+		"extension.vsixmanifest": "<PackageManifest/>",
+		"[Content_Types].xml":    "<Types/>",
+	})
+	desc, err = detectFileType(vsix)
+	if err != nil {
+		t.Fatalf("detectFileType(vsix) error = %v", err)
+	}
+	if desc != "Visual Studio extension package (VSIX)" {
+		t.Fatalf("vsix desc = %q, want %q", desc, "Visual Studio extension package (VSIX)")
+	}
+	if got := mimeForDescription(desc); got != "application/vsix" {
+		t.Fatalf("vsix mime = %q, want %q", got, "application/vsix")
 	}
 }
 

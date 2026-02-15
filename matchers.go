@@ -3,6 +3,7 @@ package main
 var matchers = []fileMatcher{
 	matcherElf,
 	matcherAr,
+	matcherRpm,
 	matcherPng,
 	matcherGif,
 	matcherJpeg,
@@ -19,6 +20,7 @@ var matchers = []fileMatcher{
 	matcherXar,
 	matcherAppleBom,
 	matcherDmg,
+	matcherEwf,
 	matcherAppleDouble,
 	matcherApplePlistBinary,
 	matcherDSStore,

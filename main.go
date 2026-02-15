@@ -464,6 +464,8 @@ func mimeForDescription(desc string) string {
 		return "application/x-java-keystore"
 	case strings.Contains(descLower, "7zip archive data"):
 		return "application/x-7z-compressed"
+	case strings.Contains(descLower, "rpm package data"):
+		return "application/x-rpm"
 	case strings.Contains(descLower, "zip archive"):
 		return "application/zip"
 	case strings.Contains(descLower, "posix tar archive"):
@@ -504,6 +506,10 @@ func mimeForDescription(desc string) string {
 		return "application/vnd.google-earth.kmz"
 	case strings.Contains(descLower, "apple ipsw firmware package"):
 		return "application/x-ipsw"
+	case strings.Contains(descLower, "nuget package (nupkg)"):
+		return "application/vnd.nuget.package"
+	case strings.Contains(descLower, "visual studio extension package (vsix)"):
+		return "application/vsix"
 	case strings.Contains(descLower, "coff object file"):
 		return "application/x-object"
 	case strings.Contains(descLower, "qt binary resource file"):
@@ -564,6 +570,8 @@ func mimeForDescription(desc string) string {
 		return "application/vnd.google-earth.kml+xml"
 	case strings.Contains(descLower, "apple udif disk image"):
 		return "application/x-apple-diskimage"
+	case strings.Contains(descLower, "expert witness compression format (ewf) image"):
+		return "application/x-ewf"
 	case strings.Contains(descLower, "heif image"):
 		return "image/heif"
 	case strings.Contains(descLower, "avif image"):
@@ -1135,6 +1143,9 @@ func doZip(file *os.File) string {
 		hasJarManifest := false
 		hasWarWebInf := false
 		hasEarAppXML := false
+		hasNuspec := false
+		hasNugetMeta := false
+		hasVsixManifest := false
 
 		// Loop through the files in the ZIP archive
 		for _, zipFile := range zipReader.File {
@@ -1203,6 +1214,15 @@ func doZip(file *os.File) string {
 			if lowerName == "meta-inf/application.xml" {
 				hasEarAppXML = true
 			}
+			if strings.HasSuffix(lowerName, ".nuspec") {
+				hasNuspec = true
+			}
+			if strings.HasPrefix(lowerName, "package/services/metadata/core-properties/") && strings.HasSuffix(lowerName, ".psmdcp") {
+				hasNugetMeta = true
+			}
+			if lowerName == "extension.vsixmanifest" || lowerName == "vsixmanifest" {
+				hasVsixManifest = true
+			}
 			if lowerName == "[content_types].xml" {
 				hasContentTypes = true
 			}
@@ -1225,6 +1245,12 @@ func doZip(file *os.File) string {
 		}
 		if hasIPSWBuildManifest && hasIPSWRestorePlist {
 			return "Apple IPSW firmware package"
+		}
+		if hasVsixManifest {
+			return "Visual Studio extension package (VSIX)"
+		}
+		if hasNuspec || (hasNugetMeta && hasContentTypes) {
+			return "NuGet package (NUPKG)"
 		}
 		if hasWarWebInf {
 			return "Java WAR archive"

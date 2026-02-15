@@ -16,6 +16,21 @@ var matcherAr = fileMatcher{
 	},
 }
 
+var matcherRpm = fileMatcher{
+	name:   "rpm",
+	minLen: 96,
+	match: func(b []byte, lenb int, magic int) bool {
+		if lenb < 96 || !HasPrefix(b, "\xED\xAB\xEE\xDB") {
+			return false
+		}
+		major := b[4]
+		return major == 3 || major == 4
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "RPM package data"
+	},
+}
+
 var matcherTar = fileMatcher{
 	name:   "tar",
 	minLen: 501,
@@ -46,6 +61,17 @@ var matcherDmg = fileMatcher{
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
 		return "Apple UDIF disk image"
+	},
+}
+
+var matcherEwf = fileMatcher{
+	name:   "ewf",
+	minLen: 8,
+	match: func(b []byte, lenb int, magic int) bool {
+		return lenb >= 8 && (HasPrefix(b, "EVF\x09\x0D\x0A\xFF\x00") || HasPrefix(b, "LVF\x09\x0D\x0A\xFF\x00"))
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "Expert Witness Compression Format (EWF) image"
 	},
 }
 
