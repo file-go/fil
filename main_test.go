@@ -128,6 +128,14 @@ func TestDetectFromBytes_Fixtures(t *testing.T) {
 			b[64] = 0x0D
 			return b
 		}(), desc: "dBase DBF database", mime: "application/x-dbf"},
+		{name: "outlook-pst-ost", data: func() []byte {
+			b := make([]byte, 32)
+			copy(b[0:4], []byte("!BDN"))
+			copy(b[8:10], []byte("SM"))
+			// Version 23 (Unicode PST/OST), little-endian.
+			b[10], b[11] = 0x17, 0x00
+			return b
+		}(), desc: "Microsoft Outlook PST/OST message store (Unicode)", mime: "application/vnd.ms-outlook"},
 		{name: "ms-access", data: func() []byte {
 			b := make([]byte, 256)
 			copy(b[:8], []byte{0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1})
@@ -184,6 +192,8 @@ func TestDetectFromBytes_Fixtures(t *testing.T) {
 		{name: "qml", data: []byte("import QtQuick 2.0\nItem {\n  property int count: 0\n}\n"), descLike: "ASCII text, QML source", mime: "text/plain"},
 		{name: "qml-import-only", data: []byte("import QtQuick 2.0\nimport QtQuick.Controls 2.5\nItem {\n  id: root\n}\n"), descLike: "QML source", mime: "text/plain"},
 		{name: "ruby-script", data: []byte("require 'json'\nclass Demo\n  def run\n    puts 'ok'\n  end\nend\n"), descLike: "Ruby script", mime: "text/plain"},
+		{name: "mbox-mailbox", data: []byte("From sender@example.com Sat Jan  1 00:00:00 2022\nDate: Sat, 1 Jan 2022 00:00:00 +0000\nFrom: Sender <sender@example.com>\nSubject: Test message\n\nBody\n"), descLike: "Mbox mailbox", mime: "application/mbox"},
+		{name: "emlx-message", data: []byte("154\nDate: Sat, 1 Jan 2022 00:00:00 +0000\nFrom: Sender <sender@example.com>\nSubject: Test emlx\nMIME-Version: 1.0\nContent-Type: text/plain; charset=utf-8\n\nBody\n"), descLike: "Apple Mail message (emlx)", mime: "message/rfc822"},
 		{name: "perl-nonutf-shebang", data: append([]byte("#!/usr/bin/perl\nprint \"ok\";\n# "), 0xE9), descLike: "Perl script", mime: "text/plain"},
 		{name: "powershell-leading-comment-block", data: []byte("<#\n.SYNOPSIS\nExample\n#>\nfunction Invoke-Test {\n  param([string]$Path)\n  Write-Host $Path\n}\n"), descLike: "PowerShell script", mime: "text/plain"},
 		{name: "powershell-not-ini", data: []byte("[CmdletBinding()]\nparam(\n[string]$Name = \"x\"\n)\n"), descLike: "PowerShell script", mime: "text/plain"},

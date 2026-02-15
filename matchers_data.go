@@ -126,6 +126,28 @@ var matcherDbf = fileMatcher{
 	},
 }
 
+var matcherOutlookStore = fileMatcher{
+	name:   "outlook-store",
+	minLen: 12,
+	match: func(b []byte, lenb int, magic int) bool {
+		if lenb < 12 || !HasPrefix(b, "!BDN") {
+			return false
+		}
+		if !Equal(b[8:10], "SM") {
+			return false
+		}
+		ver := peekLe(b[10:], 2)
+		return ver == 14 || ver == 15 || ver == 23
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		ver := peekLe(b[10:], 2)
+		if ver == 23 {
+			return "Microsoft Outlook PST/OST message store (Unicode)"
+		}
+		return "Microsoft Outlook PST/OST message store (ANSI)"
+	},
+}
+
 var matcherSqlite = fileMatcher{
 	name:   "sqlite",
 	minLen: 17,

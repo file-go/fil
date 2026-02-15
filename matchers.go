@@ -129,6 +129,7 @@ var matchers = []fileMatcher{
 	matcherAvi,
 	matcherAsf,
 	matcherMsi,
+	matcherOutlookStore,
 	matcherMsAccess,
 	matcherOle,
 	matcherWebp,

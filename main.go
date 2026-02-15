@@ -358,6 +358,12 @@ func mimeForDescription(desc string) string {
 		return "inode/directory"
 	case strings.HasPrefix(descLower, "symbolic link to "):
 		return "inode/symlink"
+	case strings.Contains(descLower, "email message (eml)"):
+		return "message/rfc822"
+	case strings.Contains(descLower, "apple mail message (emlx)"):
+		return "message/rfc822"
+	case strings.Contains(descLower, "mbox mailbox"):
+		return "application/mbox"
 	case strings.Contains(descLower, "markdown text"):
 		return "text/markdown"
 	case strings.HasPrefix(descLower, "ascii text"),
@@ -441,6 +447,8 @@ func mimeForDescription(desc string) string {
 		return "application/x-dbf"
 	case strings.Contains(descLower, "redis database dump"):
 		return "application/x-redis-rdb"
+	case strings.Contains(descLower, "microsoft outlook pst/ost message store"):
+		return "application/vnd.ms-outlook"
 	case strings.Contains(descLower, "mobipocket e-book"):
 		return "application/x-mobipocket-ebook"
 	case strings.Contains(descLower, "microsoft reader ebook"):
@@ -540,8 +548,6 @@ func mimeForDescription(desc string) string {
 		return "application/vnd.oasis.opendocument.database"
 	case descLower == "opendocument":
 		return "application/vnd.oasis.opendocument"
-	case strings.Contains(descLower, "email message (eml)"):
-		return "message/rfc822"
 	case strings.Contains(descLower, "openvpn configuration"):
 		return "application/x-openvpn-profile"
 	case strings.Contains(descLower, "qml source"):

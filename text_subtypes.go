@@ -17,6 +17,14 @@ func detectTextSubtype(b []byte) string {
 	topLower := strings.ToLower(top)
 	topLower = "\n" + topLower
 
+	if looksLikeEMLX(top) {
+		return "Apple Mail message (emlx)"
+	}
+
+	if looksLikeMbox(top) {
+		return "Mbox mailbox"
+	}
+
 	if hasAll(topLower, "\nfrom:", "\nto:", "\nsubject:", "\ndate:") {
 		return "email"
 	}
@@ -152,6 +160,69 @@ func looksLikeOpenVPN(s string) bool {
 		hits++
 	}
 	if strings.Contains(s, "\nremote ") {
+		hits++
+	}
+	return hits >= 2
+}
+
+func looksLikeMbox(s string) bool {
+	if !strings.HasPrefix(s, "From ") {
+		return false
+	}
+	lower := "\n" + strings.ToLower(s)
+	hits := 0
+	if strings.Contains(lower, "\ndate:") {
+		hits++
+	}
+	if strings.Contains(lower, "\nsubject:") {
+		hits++
+	}
+	if strings.Contains(lower, "\nfrom:") {
+		hits++
+	}
+	if strings.Contains(lower, "\nmessage-id:") {
+		hits++
+	}
+	if strings.Contains(lower, "\ncontent-type:") {
+		hits++
+	}
+	return hits >= 2
+}
+
+func looksLikeEMLX(s string) bool {
+	lineEnd := strings.IndexAny(s, "\r\n")
+	if lineEnd <= 0 {
+		return false
+	}
+	first := strings.TrimSpace(s[:lineEnd])
+	if first == "" || len(first) > 12 {
+		return false
+	}
+	for _, c := range first {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+
+	rest := strings.TrimLeft(s[lineEnd:], "\r\n")
+	if rest == "" {
+		return false
+	}
+	lower := "\n" + strings.ToLower(rest)
+	hits := 0
+	if strings.Contains(lower, "\nfrom:") {
+		hits++
+	}
+	if strings.Contains(lower, "\ndate:") {
+		hits++
+	}
+	if strings.Contains(lower, "\nsubject:") {
+		hits++
+	}
+	if strings.Contains(lower, "\ncontent-type:") {
+		hits++
+	}
+	if strings.Contains(lower, "\nmime-version:") {
 		hits++
 	}
 	return hits >= 2
