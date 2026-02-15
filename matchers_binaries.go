@@ -49,6 +49,33 @@ var matcherWasm = fileMatcher{
 	},
 }
 
+var matcherJavaKeyStore = fileMatcher{
+	name:   "java-keystore",
+	minLen: 12,
+	match: func(b []byte, lenb int, magic int) bool {
+		if lenb < 12 {
+			return false
+		}
+		// JKS and JCEKS magic numbers.
+		if !(HasPrefix(b, "\xFE\xED\xFE\xED") || HasPrefix(b, "\xCE\xCE\xCE\xCE")) {
+			return false
+		}
+		version := peekBe(b[4:], 4)
+		// Common versions are 1 and 2.
+		if version != 1 && version != 2 {
+			return false
+		}
+		entries := peekBe(b[8:], 4)
+		return entries >= 0
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		if HasPrefix(b, "\xCE\xCE\xCE\xCE") {
+			return "Java JCEKS keystore"
+		}
+		return "Java JKS keystore"
+	},
+}
+
 var matcherMacho = fileMatcher{
 	name:   "macho",
 	minLen: 33,

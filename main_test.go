@@ -40,6 +40,8 @@ func TestDetectFromBytes_Fixtures(t *testing.T) {
 		{name: "icns", data: append([]byte("icns"), make([]byte, 4)...), desc: "Apple icon image", mime: "image/icns"},
 		{name: "java-class", data: append([]byte("\xca\xfe\xba\xbe"), make([]byte, 8)...), desc: "Java class file", mime: "application/octet-stream"},
 		{name: "dex", data: append([]byte("dex\n"), make([]byte, 8)...), desc: "Android dex file", mime: "application/octet-stream"},
+		{name: "jks", data: []byte("\xFE\xED\xFE\xED\x00\x00\x00\x02\x00\x00\x00\x00"), desc: "Java JKS keystore", mime: "application/x-java-keystore"},
+		{name: "jceks", data: []byte("\xCE\xCE\xCE\xCE\x00\x00\x00\x01\x00\x00\x00\x00"), desc: "Java JCEKS keystore", mime: "application/x-java-keystore"},
 		{name: "bzip2", data: []byte("BZh91"), desc: "bzip2 compressed data", mime: "application/x-bzip2"},
 		{name: "xz", data: []byte("\xFD7zXZ\x00"), desc: "XZ compressed data", mime: "application/x-xz"},
 		{name: "zstd", data: []byte("\x28\xB5\x2F\xFD"), desc: "Zstandard compressed data", mime: "application/zstd"},
@@ -357,6 +359,65 @@ func TestDetectFileType_ZipSubtypes(t *testing.T) {
 	}
 	if desc != "Adobe InDesign IDML package" {
 		t.Fatalf("idml desc = %q, want %q", desc, "Adobe InDesign IDML package")
+	}
+
+	apk := makeZip("sample.apk", map[string]string{
+		"AndroidManifest.xml": "<manifest package=\"example\"/>",
+		"classes.dex":         "dex\n035\x00",
+	})
+	desc, err = detectFileType(apk)
+	if err != nil {
+		t.Fatalf("detectFileType(apk) error = %v", err)
+	}
+	if desc != "Android application package (APK)" {
+		t.Fatalf("apk desc = %q, want %q", desc, "Android application package (APK)")
+	}
+	if got := mimeForDescription(desc); got != "application/vnd.android.package-archive" {
+		t.Fatalf("apk mime = %q, want %q", got, "application/vnd.android.package-archive")
+	}
+
+	aab := makeZip("sample.aab", map[string]string{
+		"base/manifest/AndroidManifest.xml": "<manifest package=\"example.bundle\"/>",
+		"BundleConfig.pb":                   "bundle config",
+	})
+	desc, err = detectFileType(aab)
+	if err != nil {
+		t.Fatalf("detectFileType(aab) error = %v", err)
+	}
+	if desc != "Android app bundle (AAB)" {
+		t.Fatalf("aab desc = %q, want %q", desc, "Android app bundle (AAB)")
+	}
+	if got := mimeForDescription(desc); got != "application/vnd.android.appbundle" {
+		t.Fatalf("aab mime = %q, want %q", got, "application/vnd.android.appbundle")
+	}
+
+	kmz := makeZip("sample.kmz", map[string]string{
+		"doc.kml": "<kml xmlns=\"http://www.opengis.net/kml/2.2\"><Placemark/></kml>",
+	})
+	desc, err = detectFileType(kmz)
+	if err != nil {
+		t.Fatalf("detectFileType(kmz) error = %v", err)
+	}
+	if desc != "KMZ geospatial archive" {
+		t.Fatalf("kmz desc = %q, want %q", desc, "KMZ geospatial archive")
+	}
+	if got := mimeForDescription(desc); got != "application/vnd.google-earth.kmz" {
+		t.Fatalf("kmz mime = %q, want %q", got, "application/vnd.google-earth.kmz")
+	}
+
+	ipsw := makeZip("sample.ipsw", map[string]string{
+		"BuildManifest.plist": "<plist version=\"1.0\"></plist>",
+		"Restore.plist":       "<plist version=\"1.0\"></plist>",
+	})
+	desc, err = detectFileType(ipsw)
+	if err != nil {
+		t.Fatalf("detectFileType(ipsw) error = %v", err)
+	}
+	if desc != "Apple IPSW firmware package" {
+		t.Fatalf("ipsw desc = %q, want %q", desc, "Apple IPSW firmware package")
+	}
+	if got := mimeForDescription(desc); got != "application/x-ipsw" {
+		t.Fatalf("ipsw mime = %q, want %q", got, "application/x-ipsw")
 	}
 }
 

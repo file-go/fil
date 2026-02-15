@@ -449,6 +449,9 @@ func mimeForDescription(desc string) string {
 		return "application/fb2+xml"
 	case strings.Contains(descLower, "der encoded pkcs#7 signed data"):
 		return "application/pkcs7-signature"
+	case strings.Contains(descLower, "java jks keystore"),
+		strings.Contains(descLower, "java jceks keystore"):
+		return "application/x-java-keystore"
 	case strings.Contains(descLower, "7zip archive data"):
 		return "application/x-7z-compressed"
 	case strings.Contains(descLower, "zip archive"):
@@ -477,6 +480,14 @@ func mimeForDescription(desc string) string {
 		return "application/vnd.ms-htmlhelp"
 	case strings.Contains(descLower, "google chrome extension"):
 		return "application/x-chrome-extension"
+	case strings.Contains(descLower, "android application package (apk)"):
+		return "application/vnd.android.package-archive"
+	case strings.Contains(descLower, "android app bundle (aab)"):
+		return "application/vnd.android.appbundle"
+	case strings.Contains(descLower, "kmz geospatial archive"):
+		return "application/vnd.google-earth.kmz"
+	case strings.Contains(descLower, "apple ipsw firmware package"):
+		return "application/x-ipsw"
 	case strings.Contains(descLower, "coff object file"):
 		return "application/x-object"
 	case strings.Contains(descLower, "qt binary resource file"):
@@ -1100,6 +1111,13 @@ func doZip(file *os.File) string {
 		hasContentTypes := false
 		hasRels := false
 		hasXMLPayload := false
+		hasAPKManifest := false
+		hasDexPayload := false
+		hasAABManifest := false
+		hasAABBundleConfig := false
+		hasKMZDoc := false
+		hasIPSWBuildManifest := false
+		hasIPSWRestorePlist := false
 
 		// Loop through the files in the ZIP archive
 		for _, zipFile := range zipReader.File {
@@ -1138,6 +1156,27 @@ func doZip(file *os.File) string {
 			if lowerName == "designmap.xml" {
 				return "Adobe InDesign IDML package"
 			}
+			if lowerName == "androidmanifest.xml" {
+				hasAPKManifest = true
+			}
+			if lowerName == "classes.dex" || (strings.HasPrefix(lowerName, "classes") && strings.HasSuffix(lowerName, ".dex")) {
+				hasDexPayload = true
+			}
+			if lowerName == "base/manifest/androidmanifest.xml" {
+				hasAABManifest = true
+			}
+			if lowerName == "bundleconfig.pb" {
+				hasAABBundleConfig = true
+			}
+			if lowerName == "doc.kml" {
+				hasKMZDoc = true
+			}
+			if lowerName == "buildmanifest.plist" {
+				hasIPSWBuildManifest = true
+			}
+			if lowerName == "restore.plist" {
+				hasIPSWRestorePlist = true
+			}
 			if lowerName == "[content_types].xml" {
 				hasContentTypes = true
 			}
@@ -1149,6 +1188,18 @@ func doZip(file *os.File) string {
 			}
 		}
 
+		if hasAPKManifest && hasDexPayload {
+			return "Android application package (APK)"
+		}
+		if hasAABManifest && (hasAABBundleConfig || hasDexPayload) {
+			return "Android app bundle (AAB)"
+		}
+		if hasKMZDoc {
+			return "KMZ geospatial archive"
+		}
+		if hasIPSWBuildManifest && hasIPSWRestorePlist {
+			return "Apple IPSW firmware package"
+		}
 		if hasContentTypes && hasRels && hasXMLPayload {
 			return "Microsoft OOXML"
 		}

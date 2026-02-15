@@ -13,6 +13,7 @@ var matchers = []fileMatcher{
 	matcherTga,
 	matcherJavaClass,
 	matcherDex,
+	matcherJavaKeyStore,
 	matcherTar,
 	matcherZip,
 	matcherXar,
