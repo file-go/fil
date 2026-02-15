@@ -48,6 +48,28 @@ var matcherPdf = fileMatcher{
 	},
 }
 
+var matcherMobi = fileMatcher{
+	name:   "mobi",
+	minLen: 68,
+	match: func(b []byte, lenb int, magic int) bool {
+		return lenb >= 68 && Equal(b[60:68], "BOOKMOBI")
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "Mobipocket e-book"
+	},
+}
+
+var matcherLit = fileMatcher{
+	name:   "lit",
+	minLen: 8,
+	match: func(b []byte, lenb int, magic int) bool {
+		return lenb >= 8 && HasPrefix(b, "ITOLITLS")
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "Microsoft Reader eBook"
+	},
+}
+
 var matcherTiff = fileMatcher{
 	name:   "tiff",
 	minLen: 17,
@@ -126,6 +148,17 @@ var matcherKml = fileMatcher{
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
 		return "KML geospatial data"
+	},
+}
+
+var matcherFb2 = fileMatcher{
+	name:   "fb2",
+	minLen: 12,
+	match: func(b []byte, lenb int, magic int) bool {
+		return looksLikeFB2Document(b)
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "FictionBook e-book"
 	},
 }
 
@@ -223,6 +256,36 @@ func looksLikeKMLDocument(b []byte) bool {
 
 	if utf16Decoded, ok := decodeUTF16ToASCII(sample); ok {
 		return hasKMLMarkers(bytes.ToLower(bytes.TrimSpace(utf16Decoded)))
+	}
+
+	return false
+}
+
+func looksLikeFB2Document(b []byte) bool {
+	if len(b) < 12 {
+		return false
+	}
+
+	end := len(b)
+	if end > 8192 {
+		end = 8192
+	}
+	sample := bytes.TrimSpace(b[:end])
+	if len(sample) == 0 {
+		return false
+	}
+
+	utf8Lower := bytes.ToLower(stripUTF8BOM(sample))
+	if bytes.Contains(utf8Lower, []byte("<fictionbook")) {
+		return true
+	}
+	if bytes.Contains(utf8Lower, []byte("<description")) && bytes.Contains(utf8Lower, []byte("<body")) {
+		return true
+	}
+
+	if utf16Decoded, ok := decodeUTF16ToASCII(sample); ok {
+		d := bytes.ToLower(bytes.TrimSpace(utf16Decoded))
+		return bytes.Contains(d, []byte("<fictionbook"))
 	}
 
 	return false

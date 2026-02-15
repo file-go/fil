@@ -403,6 +403,12 @@ func mimeForDescription(desc string) string {
 		return "image/vnd.adobe.photoshop"
 	case descLower == "pdf document", descLower == "pdf image":
 		return "application/pdf"
+	case strings.Contains(descLower, "mobipocket e-book"):
+		return "application/x-mobipocket-ebook"
+	case strings.Contains(descLower, "microsoft reader ebook"):
+		return "application/x-ms-reader"
+	case strings.Contains(descLower, "fictionbook e-book"):
+		return "application/fb2+xml"
 	case strings.Contains(descLower, "der encoded pkcs#7 signed data"):
 		return "application/pkcs7-signature"
 	case strings.Contains(descLower, "7zip archive data"):
