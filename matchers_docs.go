@@ -257,7 +257,7 @@ var matcherJSON = fileMatcher{
 }
 
 func looksLikeHTMLDocument(b []byte) bool {
-	if len(b) < 5 {
+	if len(b) < 5 || !isText(b) {
 		return false
 	}
 
@@ -271,12 +271,12 @@ func looksLikeHTMLDocument(b []byte) bool {
 	}
 
 	utf8Lower := bytes.ToLower(stripUTF8BOM(sample))
-	if hasHTMLMarkers(utf8Lower) {
+	if looksLikeHTMLSample(utf8Lower) {
 		return true
 	}
 
 	if utf16Decoded, ok := decodeUTF16ToASCII(sample); ok {
-		return hasHTMLMarkers(bytes.ToLower(bytes.TrimSpace(utf16Decoded)))
+		return looksLikeHTMLSample(bytes.ToLower(bytes.TrimSpace(utf16Decoded)))
 	}
 
 	return false
@@ -463,6 +463,40 @@ func hasHTMLMarkers(s []byte) bool {
 		bytes.Contains(s, []byte("<body")) ||
 		bytes.Contains(s, []byte("<title")) ||
 		bytes.Contains(s, []byte("<meta "))
+}
+
+func looksLikeHTMLSample(s []byte) bool {
+	s = bytes.TrimSpace(s)
+	if len(s) < 5 {
+		return false
+	}
+	if !bytes.HasPrefix(s, []byte("<")) {
+		return false
+	}
+
+	// Skip a leading comment block and re-check.
+	if bytes.HasPrefix(s, []byte("<!--")) {
+		if end := bytes.Index(s, []byte("-->")); end > 0 && end+3 < len(s) {
+			s = bytes.TrimSpace(s[end+3:])
+		}
+	}
+
+	if bytes.HasPrefix(s, []byte("<!doctype html")) ||
+		bytes.HasPrefix(s, []byte("<html")) ||
+		bytes.HasPrefix(s, []byte("<head")) ||
+		bytes.HasPrefix(s, []byte("<body")) {
+		return true
+	}
+
+	// XHTML: starts as XML prolog, but should contain <html shortly after.
+	if bytes.HasPrefix(s, []byte("<?xml")) {
+		end := minInt(len(s), 1024)
+		return bytes.Contains(s[:end], []byte("<html"))
+	}
+
+	// Keep fallback marker check near beginning only to avoid embedded HTML in binary containers.
+	end := minInt(len(s), 1024)
+	return hasHTMLMarkers(s[:end])
 }
 
 func stripUTF8BOM(b []byte) []byte {

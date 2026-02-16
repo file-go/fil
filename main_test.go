@@ -125,6 +125,8 @@ func TestDetectFromBytes_Fixtures(t *testing.T) {
 		{name: "cur", data: append([]byte("\x00\x00\x02\x00\x01\x00"), make([]byte, 12)...), desc: "MS Windows cursor resource", mime: "image/x-icon"},
 		{name: "sqlite", data: []byte("SQLite format 3\x00...."), desc: "SQLite database", mime: "application/octet-stream"},
 		{name: "chm", data: append([]byte("ITSF"), make([]byte, 12)...), desc: "MS Windows HtmlHelp Data", mime: "application/vnd.ms-htmlhelp"},
+		{name: "prefetch-classic", data: []byte{0x1A, 0x00, 0x00, 0x00, 'S', 'C', 'C', 'A', 0x00, 0x00, 0x00, 0x00}, desc: "Windows Prefetch file", mime: "application/octet-stream"},
+		{name: "prefetch-compressed", data: []byte{'M', 'A', 'M', 0x04, 0xF2, 0x29, 0x00, 0x00, 0x94, 0x77, 0x87, 0x89}, desc: "Windows Prefetch file", mime: "application/octet-stream"},
 		{name: "coff-i386", data: []byte{0x4C, 0x01, 0x06, 0x00, 0, 0, 0, 0, 0x40, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0, 0, 0, 0}, desc: "Intel i386 COFF object file", mime: "application/x-object"},
 		{name: "coff-x64", data: []byte{0x64, 0x86, 0x08, 0x00, 0, 0, 0, 0, 0x80, 0x00, 0x00, 0x00, 0x14, 0x00, 0x00, 0x00, 0, 0, 0, 0}, desc: "x86-64 COFF object file", mime: "application/x-object"},
 		{name: "redis-rdb", data: append([]byte("REDIS0011"), make([]byte, 24)...), desc: "Redis database dump", mime: "application/x-redis-rdb"},
@@ -201,6 +203,12 @@ func TestDetectFromBytes_Fixtures(t *testing.T) {
 		}(), desc: "Google Webp file", mime: "image/webp"},
 		{name: "rtf", data: append([]byte("{\\rtf1"), make([]byte, 27)...), desc: "Rich Text Format", mime: "application/octet-stream"},
 		{name: "html", data: []byte("<!DOCTYPE html><html><body>ok</body></html>"), desc: "HTML document", mime: "application/octet-stream"},
+		{name: "binary-with-embedded-html", data: func() []byte {
+			b := make([]byte, 2600)
+			copy(b[:12], []byte{0x04, 0x00, 0x00, 0x00, 0x6A, 0x01, 0x00, 0x00, 0x01, 0xAD, 0x0D, 0x8B})
+			copy(b[2200:], []byte("<!doctype html><html><head><meta charset=\"utf-8\"></head></html>"))
+			return b
+		}(), desc: "data", mime: "application/octet-stream"},
 		{name: "svg", data: []byte("<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>"), desc: "SVG Scalable Vector Graphics image", mime: "image/svg+xml"},
 		{name: "xml", data: append([]byte("<?xml version=\"1.0\"?><x/>"), make([]byte, 12)...), desc: "XML document", mime: "application/octet-stream"},
 		{name: "scribus", data: []byte("<?xml version=\"1.0\"?><SCRIBUSUTF8NEW Version=\"1.5.8\"></SCRIBUSUTF8NEW>"), desc: "Scribus document", mime: "application/vnd.scribus"},

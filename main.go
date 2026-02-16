@@ -518,6 +518,8 @@ func mimeForDescription(desc string) string {
 		return "application/java-archive"
 	case strings.Contains(descLower, "ms windows htmlhelp data"):
 		return "application/vnd.ms-htmlhelp"
+	case strings.Contains(descLower, "windows prefetch file"):
+		return "application/octet-stream"
 	case strings.Contains(descLower, "tnef attachment data"):
 		return "application/ms-tnef"
 	case strings.Contains(descLower, "google chrome extension"):

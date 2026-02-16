@@ -319,11 +319,20 @@ var matcherPrefetch = fileMatcher{
 	name:   "prefetch",
 	minLen: 8,
 	match: func(b []byte, lenb int, magic int) bool {
-		if lenb < 8 || !Equal(b[4:8], "SCCA") {
+		if lenb < 8 {
 			return false
 		}
-		version := peekLe(b[:4], 4)
-		return version == 0x11 || version == 0x17 || version == 0x1a || version == 0x1e
+		// Classic prefetch: [version LE][SCCA]
+		if Equal(b[4:8], "SCCA") {
+			version := peekLe(b[:4], 4)
+			return version == 0x11 || version == 0x17 || version == 0x1a || version == 0x1e
+		}
+		// Windows compressed prefetch commonly starts with "MAM\x04"
+		if !HasPrefix(b, "MAM\x04") {
+			return false
+		}
+		decompressedSize := peekLe(b[4:8], 4)
+		return decompressedSize > 0
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
 		return "Windows Prefetch file"
