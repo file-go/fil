@@ -125,6 +125,19 @@ func TestDetectFromBytes_Fixtures(t *testing.T) {
 		{name: "cur", data: append([]byte("\x00\x00\x02\x00\x01\x00"), make([]byte, 12)...), desc: "MS Windows cursor resource", mime: "image/x-icon"},
 		{name: "sqlite", data: []byte("SQLite format 3\x00...."), desc: "SQLite database", mime: "application/octet-stream"},
 		{name: "chm", data: append([]byte("ITSF"), make([]byte, 12)...), desc: "MS Windows HtmlHelp Data", mime: "application/vnd.ms-htmlhelp"},
+		{name: "ese-db", data: func() []byte {
+			b := make([]byte, 256)
+			// Checksum as displayed (big-endian bytes).
+			b[0], b[1], b[2], b[3] = 0x43, 0xE4, 0xF6, 0x36
+			// ESE marker 0x89ABCDEF at offset 4 (little-endian).
+			b[4], b[5], b[6], b[7] = 0xEF, 0xCD, 0xAB, 0x89
+			// Version 0x620 at offset 8 (little-endian).
+			b[8], b[9], b[10], b[11] = 0x20, 0x06, 0x00, 0x00
+			// Page size 8192 at offset 236 (little-endian).
+			b[236], b[237], b[238], b[239] = 0x00, 0x20, 0x00, 0x00
+			return b
+		}(), desc: "Extensible storage engine DataBase, version 0x620, checksum 0x43e4f636, page size 8192", mime: "application/x-ms-ese"},
+		{name: "ese-log", data: []byte{0x98, 0x26, 0xEE, 0x66, 0x01, 0x00, 0x00, 0x00, 0x00, 0x10, 0x01, 0x00, 0x80, 0x00, 0x00, 0x20, 0x28, 0x24, 0x03, 0x13}, desc: "Extensible storage engine transaction log", mime: "application/x-ms-ese-log"},
 		{name: "prefetch-classic", data: []byte{0x1A, 0x00, 0x00, 0x00, 'S', 'C', 'C', 'A', 0x00, 0x00, 0x00, 0x00}, desc: "Windows Prefetch file", mime: "application/octet-stream"},
 		{name: "prefetch-compressed", data: []byte{'M', 'A', 'M', 0x04, 0xF2, 0x29, 0x00, 0x00, 0x94, 0x77, 0x87, 0x89}, desc: "Windows Prefetch file", mime: "application/octet-stream"},
 		{name: "coff-i386", data: []byte{0x4C, 0x01, 0x06, 0x00, 0, 0, 0, 0, 0x40, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0, 0, 0, 0}, desc: "Intel i386 COFF object file", mime: "application/x-object"},

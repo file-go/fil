@@ -447,6 +447,10 @@ func mimeForDescription(desc string) string {
 		return "application/x-dbf"
 	case strings.Contains(descLower, "redis database dump"):
 		return "application/x-redis-rdb"
+	case strings.Contains(descLower, "extensible storage engine database"):
+		return "application/x-ms-ese"
+	case strings.Contains(descLower, "extensible storage engine transaction log"):
+		return "application/x-ms-ese-log"
 	case strings.Contains(descLower, "microsoft outlook pst/ost message store"):
 		return "application/vnd.ms-outlook"
 	case strings.Contains(descLower, "microsoft outlook msg message"):

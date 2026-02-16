@@ -114,6 +114,8 @@ var matchers = []fileMatcher{
 	matcherLas,
 	matcherLnk,
 	matcherChm,
+	matcherEseDatabase,
+	matcherEseLog,
 	matcherEvtx,
 	matcherRegistryHive,
 	matcherPrefetch,

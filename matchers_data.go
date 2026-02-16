@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"os"
 )
 
@@ -312,6 +313,54 @@ var matcherRegistryHive = fileMatcher{
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
 		return "Windows Registry hive"
+	},
+}
+
+var matcherEseDatabase = fileMatcher{
+	name:   "ese-database",
+	minLen: 240,
+	match: func(b []byte, lenb int, magic int) bool {
+		if lenb < 240 {
+			return false
+		}
+		// ESE/Jet DB header has 0x89ABCDEF marker at offset 4.
+		if peekLe(b[4:], 4) != 0x89ABCDEF {
+			return false
+		}
+		version := peekLe(b[8:], 4)
+		if version < 0x400 || version > 0x1000 {
+			return false
+		}
+		pageSize := peekLe(b[236:], 4)
+		switch pageSize {
+		case 2048, 4096, 8192, 16384, 32768:
+		default:
+			return false
+		}
+		return true
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		checksum := uint32(b[0])<<24 | uint32(b[1])<<16 | uint32(b[2])<<8 | uint32(b[3])
+		version := peekLe(b[8:], 4)
+		pageSize := peekLe(b[236:], 4)
+		return fmt.Sprintf("Extensible storage engine DataBase, version 0x%x, checksum 0x%08x, page size %d", version, checksum, pageSize)
+	},
+}
+
+var matcherEseLog = fileMatcher{
+	name:   "ese-log",
+	minLen: 16,
+	match: func(b []byte, lenb int, magic int) bool {
+		if lenb < 16 {
+			return false
+		}
+		// Common ESE transaction log header values.
+		return peekLe(b[4:], 4) == 0x00000001 &&
+			peekLe(b[8:], 4) == 0x00011000 &&
+			peekLe(b[12:], 4) == 0x20000080
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "Extensible storage engine transaction log"
 	},
 }
 
