@@ -5,7 +5,8 @@ import "os"
 var matcherWoff = fileMatcher{
 	name:   "woff",
 	minLen: 4,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "font/woff",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return lenb >= 4 && HasPrefix(b, "wOFF")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -16,7 +17,8 @@ var matcherWoff = fileMatcher{
 var matcherWoff2 = fileMatcher{
 	name:   "woff2",
 	minLen: 4,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "font/woff2",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return lenb >= 4 && HasPrefix(b, "wOF2")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -27,7 +29,8 @@ var matcherWoff2 = fileMatcher{
 var matcherOtf = fileMatcher{
 	name:   "otf",
 	minLen: 4,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "font/otf",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return lenb >= 4 && HasPrefix(b, "OTTO")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -38,7 +41,8 @@ var matcherOtf = fileMatcher{
 var matcherEot = fileMatcher{
 	name:   "eot",
 	minLen: 36,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/vnd.ms-fontobject",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		// EOT has magic 0x504C ("LP") at offset 34 (little-endian bytes 4C 50).
 		if lenb < 36 || b[34] != 0x4C || b[35] != 0x50 {
 			return false
@@ -59,7 +63,8 @@ var matcherEot = fileMatcher{
 var matcherTtf = fileMatcher{
 	name:   "ttf",
 	minLen: 13,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "font/ttf",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return lenb > 12 && HasPrefix(b, "\x00\x01\x00\x00")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -70,7 +75,8 @@ var matcherTtf = fileMatcher{
 var matcherTtfCollection = fileMatcher{
 	name:   "ttf-collection",
 	minLen: 13,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "font/collection",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return lenb > 12 && HasPrefix(b, "ttcf\x00")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {

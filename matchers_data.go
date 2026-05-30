@@ -10,8 +10,9 @@ import (
 var matcherParquet = fileMatcher{
 	name:   "parquet",
 	minLen: 4,
-	match: func(b []byte, lenb int, magic int) bool {
-		return lenb >= 4 && HasPrefix(b, "PAR1") && hasParquetFooter()
+	mime:   "application/octet-stream",
+	match: func(b []byte, lenb int, magic int, file *os.File) bool {
+		return lenb >= 4 && HasPrefix(b, "PAR1") && hasParquetFooter(file)
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
 		return "Parquet data"
@@ -21,7 +22,8 @@ var matcherParquet = fileMatcher{
 var matcherAvro = fileMatcher{
 	name:   "avro",
 	minLen: 4,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/octet-stream",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return lenb >= 4 && HasPrefix(b, "Obj\x01")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -32,7 +34,8 @@ var matcherAvro = fileMatcher{
 var matcherHdf5 = fileMatcher{
 	name:   "hdf5",
 	minLen: 8,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/x-hdf5",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return lenb >= 8 && HasPrefix(b, "\x89HDF\x0d\x0a\x1a\x0a")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -43,7 +46,8 @@ var matcherHdf5 = fileMatcher{
 var matcherNetcdf = fileMatcher{
 	name:   "netcdf",
 	minLen: 4,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/x-netcdf",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return lenb >= 4 && (HasPrefix(b, "CDF\x01") || HasPrefix(b, "CDF\x02"))
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -54,8 +58,9 @@ var matcherNetcdf = fileMatcher{
 var matcherFeather = fileMatcher{
 	name:   "feather",
 	minLen: 6,
-	match: func(b []byte, lenb int, magic int) bool {
-		return lenb >= 6 && HasPrefix(b, "ARROW1") && hasArrowFooter()
+	mime:   "application/octet-stream",
+	match: func(b []byte, lenb int, magic int, file *os.File) bool {
+		return lenb >= 6 && HasPrefix(b, "ARROW1") && hasArrowFooter(file)
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
 		return "Apache Arrow Feather"
@@ -65,7 +70,8 @@ var matcherFeather = fileMatcher{
 var matcherPgCustomDump = fileMatcher{
 	name:   "pg-custom-dump",
 	minLen: 5,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/octet-stream",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return lenb >= 5 && HasPrefix(b, "PGDMP")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -76,7 +82,8 @@ var matcherPgCustomDump = fileMatcher{
 var matcherRedisRdb = fileMatcher{
 	name:   "redis-rdb",
 	minLen: 9,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/x-redis-rdb",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		if lenb < 9 || !HasPrefix(b, "REDIS") {
 			return false
 		}
@@ -95,7 +102,8 @@ var matcherRedisRdb = fileMatcher{
 var matcherDbf = fileMatcher{
 	name:   "dbf",
 	minLen: 33,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/x-dbf",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		if lenb < 33 {
 			return false
 		}
@@ -130,7 +138,8 @@ var matcherDbf = fileMatcher{
 var matcherOutlookStore = fileMatcher{
 	name:   "outlook-store",
 	minLen: 12,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/vnd.ms-outlook",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		if lenb < 12 || !HasPrefix(b, "!BDN") {
 			return false
 		}
@@ -152,7 +161,8 @@ var matcherOutlookStore = fileMatcher{
 var matcherSqlite = fileMatcher{
 	name:   "sqlite",
 	minLen: 17,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/x-sqlite3",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return lenb > 16 && HasPrefix(b, "\x53\x51\x4C\x69\x74\x65\x20\x66\x6F\x72\x6D\x61\x74\x20\x33\x00")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -163,7 +173,8 @@ var matcherSqlite = fileMatcher{
 var matcherSqliteWal = fileMatcher{
 	name:   "sqlite-wal",
 	minLen: 4,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/x-sqlite3",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return lenb >= 4 && (Equal(b[:4], "\x37\x7F\x06\x82") || Equal(b[:4], "\x37\x7F\x06\x83"))
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -174,7 +185,8 @@ var matcherSqliteWal = fileMatcher{
 var matcherSqliteJournal = fileMatcher{
 	name:   "sqlite-journal",
 	minLen: 16,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/x-sqlite3",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		if lenb <= 15 || !HasPrefix(b, "\x53\x51\x4C\x69\x74\x65\x20\x66\x6F\x72\x6D\x61\x74\x20\x33\x00") {
 			return false
 		}
@@ -192,7 +204,8 @@ var matcherSqliteJournal = fileMatcher{
 var matcherPcapng = fileMatcher{
 	name:   "pcapng",
 	minLen: 17,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/octet-stream",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return lenb > 16 && HasPrefix(b, "\x0A\x0D\x0D\x0A")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -203,7 +216,8 @@ var matcherPcapng = fileMatcher{
 var matcherPcap = fileMatcher{
 	name:   "pcap",
 	minLen: 17,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/octet-stream",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return lenb > 16 &&
 			(HasPrefix(b, "\xD4\xC3\xB2\xA1") || HasPrefix(b, "\xA1\xB2\xC3\xD4") || HasPrefix(b, "\x4D\x3C\xB2\xA1") || HasPrefix(b, "\xA1\xB2\x3C\x4D"))
 	},
@@ -215,7 +229,8 @@ var matcherPcap = fileMatcher{
 var matcherTNEF = fileMatcher{
 	name:   "tnef",
 	minLen: 6,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/ms-tnef",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return lenb >= 6 && HasPrefix(b, "\x78\x9F\x3E\x22")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -226,7 +241,8 @@ var matcherTNEF = fileMatcher{
 var matcherGettextMO = fileMatcher{
 	name:   "gettext-mo",
 	minLen: 28,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/x-gettext-translation",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		if lenb < 28 {
 			return false
 		}
@@ -249,7 +265,8 @@ var matcherGettextMO = fileMatcher{
 var matcherGIRTypelib = fileMatcher{
 	name:   "gir-typelib",
 	minLen: len("GOBJ\nMETADATA\r\n\x1A"),
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/octet-stream",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return lenb >= len("GOBJ\nMETADATA\r\n\x1A") && HasPrefix(b, "GOBJ\nMETADATA\r\n\x1A")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -260,7 +277,8 @@ var matcherGIRTypelib = fileMatcher{
 var matcherCrx = fileMatcher{
 	name:   "crx",
 	minLen: 12,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/x-chrome-extension",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		if lenb < 12 || !HasPrefix(b, "Cr24") {
 			return false
 		}
@@ -275,7 +293,8 @@ var matcherCrx = fileMatcher{
 var matcherRcc = fileMatcher{
 	name:   "rcc",
 	minLen: 4,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/octet-stream",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return lenb >= 4 && HasPrefix(b, "qres")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -286,7 +305,8 @@ var matcherRcc = fileMatcher{
 var matcherLnk = fileMatcher{
 	name:   "lnk",
 	minLen: 20,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/x-ms-shortcut",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return lenb >= 20 && HasPrefix(b, "\x4C\x00\x00\x00\x01\x14\x02\x00\x00\x00\x00\x00\xC0\x00\x00\x00\x00\x00\x00\x46")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -297,7 +317,8 @@ var matcherLnk = fileMatcher{
 var matcherChm = fileMatcher{
 	name:   "chm",
 	minLen: 4,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/vnd.ms-htmlhelp",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return lenb >= 4 && HasPrefix(b, "ITSF")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -308,7 +329,8 @@ var matcherChm = fileMatcher{
 var matcherRegistryHive = fileMatcher{
 	name:   "registry-hive",
 	minLen: 4,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/octet-stream",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return lenb >= 4 && HasPrefix(b, "regf")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -319,7 +341,8 @@ var matcherRegistryHive = fileMatcher{
 var matcherEseDatabase = fileMatcher{
 	name:   "ese-database",
 	minLen: 240,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/x-ms-ese",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		if lenb < 240 {
 			return false
 		}
@@ -350,7 +373,8 @@ var matcherEseDatabase = fileMatcher{
 var matcherEseLog = fileMatcher{
 	name:   "ese-log",
 	minLen: 16,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/x-ms-ese-log",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		if lenb < 16 {
 			return false
 		}
@@ -367,7 +391,8 @@ var matcherEseLog = fileMatcher{
 var matcherPrefetch = fileMatcher{
 	name:   "prefetch",
 	minLen: 8,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/octet-stream",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		if lenb < 8 {
 			return false
 		}
@@ -391,7 +416,8 @@ var matcherPrefetch = fileMatcher{
 var matcherEvtx = fileMatcher{
 	name:   "evtx",
 	minLen: 8,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/octet-stream",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return lenb >= 8 && HasPrefix(b, "ElfFile\x00")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -402,7 +428,8 @@ var matcherEvtx = fileMatcher{
 var matcherPdb = fileMatcher{
 	name:   "pdb",
 	minLen: len("Microsoft C/C++ MSF 7.00"),
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/octet-stream",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return lenb >= len("Microsoft C/C++ MSF 7.00") &&
 			HasPrefix(b, "Microsoft C/C++ MSF 7.00")
 	},
@@ -414,7 +441,8 @@ var matcherPdb = fileMatcher{
 var matcherRoslynPdb = fileMatcher{
 	name:   "roslyn-pdb",
 	minLen: 32,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/octet-stream",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		// Portable PDB files are ECMA-335 metadata blobs with "BSJB" signature.
 		if lenb < 32 || !HasPrefix(b, "BSJB") {
 			return false
@@ -434,7 +462,8 @@ var matcherRoslynPdb = fileMatcher{
 var matcherMagicMgc = fileMatcher{
 	name:   "magic-mgc",
 	minLen: 4,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/octet-stream",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		// libmagic compiled magic header (endianness variants).
 		return lenb >= 4 && (HasPrefix(b, "\x1C\x04\x1E\xF1") || HasPrefix(b, "\xF1\x1E\x04\x1C"))
 	},
@@ -446,7 +475,8 @@ var matcherMagicMgc = fileMatcher{
 var matcherMinidump = fileMatcher{
 	name:   "minidump",
 	minLen: 4,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/octet-stream",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return lenb >= 4 && HasPrefix(b, "MDMP")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -457,7 +487,8 @@ var matcherMinidump = fileMatcher{
 var matcherThumbcache = fileMatcher{
 	name:   "thumbcache",
 	minLen: 4,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/octet-stream",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return lenb >= 4 && HasPrefix(b, "CMMM")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -468,7 +499,8 @@ var matcherThumbcache = fileMatcher{
 var matcherRecycleBinI = fileMatcher{
 	name:   "recyclebin-i",
 	minLen: 24,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/octet-stream",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		if lenb < 24 {
 			return false
 		}
@@ -507,7 +539,8 @@ func hasRecycleBinPathHint(b []byte) bool {
 var matcherTdf = fileMatcher{
 	name:   "tdf",
 	minLen: 17,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/octet-stream",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return lenb > 16 && HasPrefix(b, "\x54\x44\x46\x24")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -518,7 +551,8 @@ var matcherTdf = fileMatcher{
 var matcherTdef = fileMatcher{
 	name:   "tdef",
 	minLen: 17,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/octet-stream",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return lenb > 16 && HasPrefix(b, "\x54\x44\x45\x46")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {

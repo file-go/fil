@@ -30,11 +30,10 @@ const (
 type fileMatcher struct {
 	name     string
 	minLen   int
-	match    func([]byte, int, int) bool
+	mime     string
+	match    func([]byte, int, int, *os.File) bool
 	describe func([]byte, int, int, *os.File) string
 }
-
-var activeFile *os.File
 
 func main() {
 	brief := flag.Bool("b", false, "brief output (type only)")
@@ -58,20 +57,22 @@ func main() {
 		}
 		files = list
 	} else {
-		// Expand the wildcard pattern into a list of file names
-		if flag.Arg(0) == "-" {
-			handleStdin(*brief, *mimeOutput, *jsonOutput)
-			return
-		}
-		var err error
-		files, err = filepath.Glob(flag.Arg(0))
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return
+		// Expand each argument as a glob pattern and collect results.
+		for _, arg := range flag.Args() {
+			if arg == "-" {
+				handleStdin(*brief, *mimeOutput, *jsonOutput)
+				continue
+			}
+			expanded, err := filepath.Glob(arg)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				continue
+			}
+			files = append(files, expanded...)
 		}
 	}
 
-	// Get the length of the longest file name
+	// Get the length of the longest file name for column alignment.
 	longestFileName := 0
 	for _, fileName := range files {
 		if len(fileName) > longestFileName {
@@ -89,7 +90,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Println("Usage: fil [-b] [-i] [-L] [--json] [--files-from=PATH] FILE_NAME")
+	fmt.Println("Usage: fil [-b] [-i] [-L] [--json] [--files-from=PATH] FILE [FILE ...]")
 	fmt.Println("       fil -")
 	fmt.Println("  -b    brief output (type only)")
 	fmt.Println("  -i    MIME type output")
@@ -112,7 +113,7 @@ func processPath(filename string, longestFileName int, brief bool, mimeOutput bo
 	}
 
 	if fi.Mode().IsDir() {
-		printResult(filename, longestFileName, brief, mimeOutput, jsonOutput, "directory")
+		printResult(filename, longestFileName, brief, mimeOutput, jsonOutput, "directory", "")
 		return
 	}
 
@@ -128,50 +129,53 @@ func processPath(filename string, longestFileName int, brief bool, mimeOutput bo
 			return
 		}
 		if tinfo.IsDir() {
-			printResult(filename, longestFileName, brief, mimeOutput, jsonOutput, "directory")
+			printResult(filename, longestFileName, brief, mimeOutput, jsonOutput, "directory", "")
 			return
 		}
-		desc, derr := detectFileType(target)
+		desc, mime, derr := detectFileType(target)
 		if derr != nil {
 			emitError(filename, derr, jsonOutput)
 			return
 		}
-		printResult(filename, longestFileName, brief, mimeOutput, jsonOutput, desc)
+		printResult(filename, longestFileName, brief, mimeOutput, jsonOutput, desc, mime)
 		return
 	}
 
 	switch {
 	case fi.Mode()&os.ModeSymlink != 0:
 		reallink, _ := os.Readlink(filename)
-		printResult(filename, longestFileName, brief, mimeOutput, jsonOutput, "symbolic link to "+reallink)
+		printResult(filename, longestFileName, brief, mimeOutput, jsonOutput, "symbolic link to "+reallink, "")
 	case fi.Mode()&os.ModeSocket != 0:
-		printResult(filename, longestFileName, brief, mimeOutput, jsonOutput, "socket")
+		printResult(filename, longestFileName, brief, mimeOutput, jsonOutput, "socket", "")
 	case fi.Mode()&os.ModeCharDevice != 0:
-		printResult(filename, longestFileName, brief, mimeOutput, jsonOutput, "character special device")
+		printResult(filename, longestFileName, brief, mimeOutput, jsonOutput, "character special device", "")
 	case fi.Mode()&os.ModeDevice != 0:
-		printResult(filename, longestFileName, brief, mimeOutput, jsonOutput, "device file")
+		printResult(filename, longestFileName, brief, mimeOutput, jsonOutput, "device file", "")
 	case fi.Mode()&os.ModeNamedPipe != 0:
-		printResult(filename, longestFileName, brief, mimeOutput, jsonOutput, "fifo")
+		printResult(filename, longestFileName, brief, mimeOutput, jsonOutput, "fifo", "")
 	default:
-		desc, derr := detectFileType(filename)
+		desc, mime, derr := detectFileType(filename)
 		if derr != nil {
 			emitError(filename, derr, jsonOutput)
 			return
 		}
-		printResult(filename, longestFileName, brief, mimeOutput, jsonOutput, desc)
+		printResult(filename, longestFileName, brief, mimeOutput, jsonOutput, desc, mime)
 	}
 }
 
-func printResult(filename string, longestFileName int, brief bool, mimeOutput bool, jsonOutput bool, desc string) {
+func printResult(filename string, longestFileName int, brief bool, mimeOutput bool, jsonOutput bool, desc, mime string) {
 	if desc == "" {
 		return
 	}
 	if jsonOutput {
-		emitJSON(filename, desc, mimeOutput, "")
+		emitJSON(filename, desc, mimeOutput, mime, "")
 		return
 	}
 	if mimeOutput {
-		desc = mimeForDescription(desc)
+		if mime == "" {
+			mime = dynamicMIME(desc)
+		}
+		desc = mime
 	}
 	if !brief {
 		fmt.Print(filename + ": ")
@@ -189,14 +193,17 @@ type jsonLine struct {
 	Error string `json:"error,omitempty"`
 }
 
-func emitJSON(path string, desc string, mimeOutput bool, errMsg string) {
+func emitJSON(path string, desc string, mimeOutput bool, mime string, errMsg string) {
 	out := jsonLine{
 		Path:  path,
 		Type:  desc,
 		Error: errMsg,
 	}
 	if mimeOutput {
-		out.Mime = mimeForDescription(desc)
+		if mime == "" {
+			mime = dynamicMIME(desc)
+		}
+		out.Mime = mime
 	}
 	b, err := json.Marshal(out)
 	if err != nil {
@@ -209,16 +216,16 @@ func emitJSON(path string, desc string, mimeOutput bool, errMsg string) {
 func emitError(path string, err error, jsonOutput bool) {
 	fmt.Fprintln(os.Stderr, path+": "+err.Error())
 	if jsonOutput {
-		emitJSON(path, "", false, err.Error())
+		emitJSON(path, "", false, "", err.Error())
 	}
 }
 
-func detectFileType(filename string) (string, error) {
+func detectFileType(filename string) (string, string, error) {
 
 	/*---------------Read file------------------------*/
 	file, err := os.OpenFile(filename, os.O_RDONLY, 0666)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	defer file.Close()
 
@@ -226,21 +233,17 @@ func detectFileType(filename string) (string, error) {
 
 	numByte, err := file.Read(contentByte)
 	if err != nil && err != io.EOF {
-		return "", err
+		return "", "", err
 	}
 	contentByte = contentByte[:numByte]
 
 	return detectFromBytes(contentByte, filename, file)
 }
 
-func detectFromBytes(contentByte []byte, filename string, file *os.File) (string, error) {
-	activeFile = file
-	defer func() {
-		activeFile = nil
-	}()
+func detectFromBytes(contentByte []byte, filename string, file *os.File) (string, string, error) {
 	lenb := len(contentByte)
 	if lenb == 0 {
-		return "empty", nil
+		return "empty", "application/octet-stream", nil
 	}
 	/*---------------Read file end------------------------*/
 	magic := -1
@@ -249,16 +252,21 @@ func detectFromBytes(contentByte []byte, filename string, file *os.File) (string
 	}
 
 	for _, matcher := range matchers {
-		if lenb >= matcher.minLen && matcher.match(contentByte, lenb, magic) {
+		if lenb >= matcher.minLen && matcher.match(contentByte, lenb, magic, file) {
 			if matcher.name == "data" {
 				if desc := glibcLocaleDescriptionForPath(filename, contentByte); desc != "" {
-					return desc, nil
+					return desc, "application/octet-stream", nil
 				}
 			}
-			return matcher.describe(contentByte, lenb, magic, file), nil
+			desc := matcher.describe(contentByte, lenb, magic, file)
+			mime := matcher.mime
+			if mime == "" {
+				mime = dynamicMIME(desc)
+			}
+			return desc, mime, nil
 		}
 	}
-	return "", nil
+	return "", "application/octet-stream", nil
 }
 
 func glibcLocaleDescriptionForPath(filename string, b []byte) string {
@@ -313,12 +321,12 @@ func handleStdin(brief bool, mimeOutput bool, jsonOutput bool) {
 			return
 		}
 	}
-	desc, derr := detectFromBytes(buf[:n], "stdin", nil)
+	desc, mime, derr := detectFromBytes(buf[:n], "stdin", nil)
 	if derr != nil {
 		emitError("stdin", derr, jsonOutput)
 		return
 	}
-	printResult("stdin", 0, brief, mimeOutput, jsonOutput, desc)
+	printResult("stdin", 0, brief, mimeOutput, jsonOutput, desc, mime)
 }
 
 func readFilesFrom(path string) ([]string, error) {
@@ -350,328 +358,128 @@ func readFilesFrom(path string) ([]string, error) {
 	return out, nil
 }
 
-func mimeForDescription(desc string) string {
-	descLower := strings.ToLower(desc)
+// dynamicMIME resolves MIME types for matchers whose describe functions return
+// varying strings (zip sub-types, tar, ar, text, pem, 3gpp, xml) and for
+// OS-level descriptors (directory, symlink) that bypass the matcher registry.
+// All matchers with static descriptions use the mime field instead.
+func dynamicMIME(desc string) string {
+	dl := strings.ToLower(desc)
 
 	switch {
-	case descLower == "directory":
+	// OS-level types
+	case dl == "directory":
 		return "inode/directory"
-	case strings.HasPrefix(descLower, "symbolic link to "):
+	case strings.HasPrefix(dl, "symbolic link to "):
 		return "inode/symlink"
-	case strings.Contains(descLower, "email message (eml)"):
-		return "message/rfc822"
-	case strings.Contains(descLower, "apple mail message (emlx)"):
-		return "message/rfc822"
-	case strings.Contains(descLower, "mbox mailbox"):
-		return "application/mbox"
-	case strings.Contains(descLower, "markdown text"):
-		return "text/markdown"
-	case strings.HasPrefix(descLower, "ascii text"),
-		strings.HasPrefix(descLower, "utf-8 text"),
-		strings.HasPrefix(descLower, "non-utf text"),
-		strings.HasPrefix(descLower, "unicode text, utf-16"):
-		return "text/plain"
-	case descLower == "png image data":
-		return "image/png"
-	case descLower == "gif image data":
-		return "image/gif"
-	case strings.HasPrefix(descLower, "jpeg / jpg image data"):
-		return "image/jpeg"
-	case descLower == "dds image data":
-		return "image/vnd-ms.dds"
-	case descLower == "openexr image data":
-		return "image/x-exr"
-	case descLower == "radiance hdr image data":
-		return "image/vnd.radiance"
-	case descLower == "apple icon image":
-		return "image/icns"
-	case descLower == "targa image data":
-		return "image/x-tga"
-	case descLower == "bmp image":
-		return "image/bmp"
-	case descLower == "windows metafile":
-		return "image/wmf"
-	case descLower == "tiff image data":
-		return "image/tiff"
-	case descLower == "google webp file":
-		return "image/webp"
-	case descLower == "svg scalable vector graphics image":
-		return "image/svg+xml"
-	case descLower == "ms windows icon resource":
-		return "image/x-icon"
-	case descLower == "ms windows cursor resource":
-		return "image/x-icon"
-	case descLower == "opentype font data":
-		return "font/otf"
-	case descLower == "embedded opentype font":
-		return "application/vnd.ms-fontobject"
-	case descLower == "photoshop document":
-		return "image/vnd.adobe.photoshop"
-	case descLower == "pdf document", descLower == "pdf image":
-		return "application/pdf"
-	case strings.Contains(descLower, "xar archive (apple installer package)"):
-		return "application/x-xar"
-	case strings.Contains(descLower, "apple bom archive"):
-		return "application/x-apple-bom"
-	case strings.Contains(descLower, "appledouble encoded file"):
-		return "application/applefile"
-	case strings.Contains(descLower, "apple property list"):
-		return "application/x-plist"
-	case strings.Contains(descLower, "apple ds_store metadata"):
-		return "application/octet-stream"
-	case strings.Contains(descLower, "apple apfs filesystem"):
-		return "application/octet-stream"
-	case strings.Contains(descLower, "apple hfs/hfs+ filesystem"):
-		return "application/octet-stream"
-	case strings.Contains(descLower, "adobe indesign document"):
-		return "application/x-indesign"
-	case strings.Contains(descLower, "adobe indesign idml package"):
-		return "application/vnd.adobe.indesign-idml-package"
-	case strings.Contains(descLower, "autocad dwg drawing"):
-		return "image/vnd.dwg"
-	case strings.Contains(descLower, "autocad dxf drawing exchange format"):
-		return "image/vnd.dxf"
-	case strings.Contains(descLower, "step cad model"):
-		return "model/step"
-	case strings.Contains(descLower, "scribus document"):
-		return "application/vnd.scribus"
-	case strings.Contains(descLower, "esri shapefile data"):
-		return "application/x-esri-shape"
-	case strings.Contains(descLower, "asprs las lidar data"):
-		return "application/vnd.las"
-	case strings.Contains(descLower, "ogc geopackage database"):
-		return "application/geopackage+sqlite3"
-	case strings.Contains(descLower, "microsoft access database"):
-		return "application/x-msaccess"
-	case strings.Contains(descLower, "dbase dbf database"):
-		return "application/x-dbf"
-	case strings.Contains(descLower, "redis database dump"):
-		return "application/x-redis-rdb"
-	case strings.Contains(descLower, "extensible storage engine database"):
-		return "application/x-ms-ese"
-	case strings.Contains(descLower, "extensible storage engine transaction log"):
-		return "application/x-ms-ese-log"
-	case strings.Contains(descLower, "microsoft outlook pst/ost message store"):
-		return "application/vnd.ms-outlook"
-	case strings.Contains(descLower, "microsoft outlook msg message"):
-		return "application/vnd.ms-outlook"
-	case strings.Contains(descLower, "pem certificate request"):
-		return "application/pkcs10"
-	case strings.Contains(descLower, "pem certificate"),
-		strings.Contains(descLower, "pem private key"),
-		strings.Contains(descLower, "pem public key"),
-		strings.Contains(descLower, "openssh private key"),
-		strings.Contains(descLower, "pem pkcs#7 message"):
-		return "application/x-pem-file"
-	case strings.Contains(descLower, "pkcs#12 key store"):
-		return "application/x-pkcs12"
-	case strings.Contains(descLower, "x.509 certificate (der)"):
-		return "application/pkix-cert"
-	case strings.Contains(descLower, "pkcs#8 private key (der)"):
-		return "application/pkcs8"
-	case strings.Contains(descLower, "x.509 subjectpublickeyinfo (der public key)"):
-		return "application/pkix-key"
-	case strings.Contains(descLower, "java serialized object"):
-		return "application/x-java-serialized-object"
-	case strings.Contains(descLower, "java jmod module"):
-		return "application/x-java-jmod"
-	case strings.Contains(descLower, "java hprof heap dump"):
-		return "application/x-java-hprof"
-	case strings.Contains(descLower, "mobipocket e-book"):
-		return "application/x-mobipocket-ebook"
-	case strings.Contains(descLower, "microsoft reader ebook"):
-		return "application/x-ms-reader"
-	case strings.Contains(descLower, "fictionbook e-book"):
-		return "application/fb2+xml"
-	case strings.Contains(descLower, "java web start jnlp file"):
-		return "application/x-java-jnlp-file"
-	case strings.Contains(descLower, "der encoded pkcs#7 signed data"):
-		return "application/pkcs7-signature"
-	case strings.Contains(descLower, "java jks keystore"),
-		strings.Contains(descLower, "java jceks keystore"):
-		return "application/x-java-keystore"
-	case strings.Contains(descLower, "7zip archive data"):
-		return "application/x-7z-compressed"
-	case strings.Contains(descLower, "rpm package data"):
-		return "application/x-rpm"
-	case strings.Contains(descLower, "zip archive"):
-		return "application/zip"
-	case strings.Contains(descLower, "posix tar archive"):
-		return "application/x-tar"
-	case strings.Contains(descLower, "debian binary package"):
-		return "application/vnd.debian.binary-package"
-	case strings.Contains(descLower, "gzip compressed data"):
-		return "application/gzip"
-	case strings.Contains(descLower, "bzip2 compressed data"):
-		return "application/x-bzip2"
-	case strings.Contains(descLower, "xz compressed data"):
-		return "application/x-xz"
-	case strings.Contains(descLower, "zstandard compressed data"):
-		return "application/zstd"
-	case strings.Contains(descLower, "lz4 compressed data"):
-		return "application/x-lz4"
-	case strings.Contains(descLower, "lzip compressed data"):
-		return "application/x-lzip"
-	case strings.Contains(descLower, "ms compress archive data"):
-		return "application/x-ms-compress"
-	case strings.Contains(descLower, "rar archive data"):
-		return "application/vnd.rar"
-	case strings.Contains(descLower, "java jar archive"),
-		strings.Contains(descLower, "java war archive"),
-		strings.Contains(descLower, "java ear archive"):
-		return "application/java-archive"
-	case strings.Contains(descLower, "ms windows htmlhelp data"):
-		return "application/vnd.ms-htmlhelp"
-	case strings.Contains(descLower, "windows prefetch file"):
-		return "application/octet-stream"
-	case strings.Contains(descLower, "tnef attachment data"):
-		return "application/ms-tnef"
-	case strings.Contains(descLower, "google chrome extension"):
-		return "application/x-chrome-extension"
-	case strings.Contains(descLower, "android application package (apk)"):
-		return "application/vnd.android.package-archive"
-	case strings.Contains(descLower, "android app bundle (aab)"):
-		return "application/vnd.android.appbundle"
-	case strings.Contains(descLower, "kmz geospatial archive"):
-		return "application/vnd.google-earth.kmz"
-	case strings.Contains(descLower, "apple ipsw firmware package"):
-		return "application/x-ipsw"
-	case strings.Contains(descLower, "nuget package (nupkg)"):
-		return "application/vnd.nuget.package"
-	case strings.Contains(descLower, "visual studio extension package (vsix)"):
-		return "application/vsix"
-	case strings.Contains(descLower, "coff object file"):
-		return "application/x-object"
-	case strings.Contains(descLower, "qt binary resource file"):
-		return "application/octet-stream"
-	case strings.Contains(descLower, "microsoft word 2007+"):
+
+	// ZIP sub-types (doZip returns many different descriptions)
+	case strings.Contains(dl, "microsoft word 2007+"):
 		return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-	case strings.Contains(descLower, "microsoft excel 2007+"):
+	case strings.Contains(dl, "microsoft excel 2007+"):
 		return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-	case strings.Contains(descLower, "microsoft powerpoint 2007+"):
+	case strings.Contains(dl, "microsoft powerpoint 2007+"):
 		return "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-	case strings.Contains(descLower, "microsoft ooxml"):
+	case strings.Contains(dl, "microsoft ooxml"):
 		return "application/vnd.openxmlformats-officedocument"
-	case strings.Contains(descLower, "microsoft silverlight application"):
+	case strings.Contains(dl, "microsoft silverlight application"):
 		return "application/x-silverlight-app"
-	case strings.Contains(descLower, "epub document"):
+	case strings.Contains(dl, "adobe indesign idml package"):
+		return "application/vnd.adobe.indesign-idml-package"
+	case strings.Contains(dl, "android application package (apk)"):
+		return "application/vnd.android.package-archive"
+	case strings.Contains(dl, "android app bundle (aab)"):
+		return "application/vnd.android.appbundle"
+	case strings.Contains(dl, "kmz geospatial archive"):
+		return "application/vnd.google-earth.kmz"
+	case strings.Contains(dl, "apple ipsw firmware package"):
+		return "application/x-ipsw"
+	case strings.Contains(dl, "visual studio extension package (vsix)"):
+		return "application/vsix"
+	case strings.Contains(dl, "nuget package (nupkg)"):
+		return "application/vnd.nuget.package"
+	case strings.Contains(dl, "java war archive"), strings.Contains(dl, "java ear archive"), strings.Contains(dl, "java jar archive"):
+		return "application/java-archive"
+	case strings.Contains(dl, "epub document"):
 		return "application/epub+zip"
-	case descLower == "opendocument text":
+	case dl == "opendocument text":
 		return "application/vnd.oasis.opendocument.text"
-	case descLower == "opendocument text template":
+	case dl == "opendocument text template":
 		return "application/vnd.oasis.opendocument.text-template"
-	case descLower == "opendocument spreadsheet":
-		return "application/vnd.oasis.opendocument.spreadsheet"
-	case descLower == "opendocument spreadsheet template":
-		return "application/vnd.oasis.opendocument.spreadsheet-template"
-	case descLower == "opendocument presentation":
-		return "application/vnd.oasis.opendocument.presentation"
-	case descLower == "opendocument presentation template":
-		return "application/vnd.oasis.opendocument.presentation-template"
-	case descLower == "opendocument graphics":
-		return "application/vnd.oasis.opendocument.graphics"
-	case descLower == "opendocument graphics template":
-		return "application/vnd.oasis.opendocument.graphics-template"
-	case descLower == "opendocument chart":
-		return "application/vnd.oasis.opendocument.chart"
-	case descLower == "opendocument chart template":
-		return "application/vnd.oasis.opendocument.chart-template"
-	case descLower == "opendocument image":
-		return "application/vnd.oasis.opendocument.image"
-	case descLower == "opendocument image template":
-		return "application/vnd.oasis.opendocument.image-template"
-	case descLower == "opendocument formula":
-		return "application/vnd.oasis.opendocument.formula"
-	case descLower == "opendocument formula template":
-		return "application/vnd.oasis.opendocument.formula-template"
-	case descLower == "opendocument text web":
+	case dl == "opendocument text web":
 		return "application/vnd.oasis.opendocument.text-web"
-	case descLower == "opendocument text master":
+	case dl == "opendocument text master":
 		return "application/vnd.oasis.opendocument.text-master"
-	case descLower == "opendocument database":
+	case dl == "opendocument spreadsheet":
+		return "application/vnd.oasis.opendocument.spreadsheet"
+	case dl == "opendocument spreadsheet template":
+		return "application/vnd.oasis.opendocument.spreadsheet-template"
+	case dl == "opendocument presentation":
+		return "application/vnd.oasis.opendocument.presentation"
+	case dl == "opendocument presentation template":
+		return "application/vnd.oasis.opendocument.presentation-template"
+	case dl == "opendocument graphics":
+		return "application/vnd.oasis.opendocument.graphics"
+	case dl == "opendocument graphics template":
+		return "application/vnd.oasis.opendocument.graphics-template"
+	case dl == "opendocument chart":
+		return "application/vnd.oasis.opendocument.chart"
+	case dl == "opendocument chart template":
+		return "application/vnd.oasis.opendocument.chart-template"
+	case dl == "opendocument image":
+		return "application/vnd.oasis.opendocument.image"
+	case dl == "opendocument image template":
+		return "application/vnd.oasis.opendocument.image-template"
+	case dl == "opendocument formula":
+		return "application/vnd.oasis.opendocument.formula"
+	case dl == "opendocument formula template":
+		return "application/vnd.oasis.opendocument.formula-template"
+	case dl == "opendocument database":
 		return "application/vnd.oasis.opendocument.database"
-	case descLower == "opendocument":
+	case strings.HasPrefix(dl, "opendocument"):
 		return "application/vnd.oasis.opendocument"
-	case strings.Contains(descLower, "openvpn configuration"):
-		return "application/x-openvpn-profile"
-	case strings.Contains(descLower, "qml source"):
-		return "text/plain"
-	case strings.Contains(descLower, "kml geospatial data"):
-		return "application/vnd.google-earth.kml+xml"
-	case strings.Contains(descLower, "apple udif disk image"):
-		return "application/x-apple-diskimage"
-	case strings.Contains(descLower, "expert witness compression format (ewf) image"):
-		return "application/x-ewf"
-	case strings.Contains(descLower, "heif image"):
-		return "image/heif"
-	case strings.Contains(descLower, "avif image"):
-		return "image/avif"
-	case strings.Contains(descLower, "jpeg xl image data"):
-		return "image/jxl"
-	case strings.Contains(descLower, "jpeg 2000 image data"):
-		return "image/jp2"
-	case strings.Contains(descLower, "adobe dng raw image data"):
-		return "image/x-adobe-dng"
-	case strings.Contains(descLower, "canon cr2 raw image data"):
-		return "image/x-canon-cr2"
-	case strings.Contains(descLower, "canon cr3 raw image data"):
-		return "image/x-canon-cr3"
-	case strings.Contains(descLower, "nikon nef raw image data"):
-		return "image/x-nikon-nef"
-	case strings.Contains(descLower, "sony arw raw image data"):
-		return "image/x-sony-arw"
-	case strings.Contains(descLower, "fuji raf raw image data"):
-		return "image/x-fuji-raf"
-	case strings.Contains(descLower, "olympus orf raw image data"):
-		return "image/x-olympus-orf"
-	case strings.Contains(descLower, "panasonic rw2 raw image data"):
-		return "image/x-panasonic-rw2"
-	case strings.Contains(descLower, "m4a audio"):
-		return "audio/mp4"
-	case strings.Contains(descLower, "quicktime movie file"):
-		return "video/quicktime"
-	case strings.Contains(descLower, "3gpp2 video file"):
-		return "video/3gpp2"
-	case strings.Contains(descLower, "3gpp video file"):
-		return "video/3gpp"
-	case strings.Contains(descLower, "m4v video file"):
-		return "video/x-m4v"
-	case strings.Contains(descLower, "mp4 video file"):
-		return "video/mp4"
-	case strings.Contains(descLower, "mpeg video file"):
-		return "video/mpeg"
-	case strings.Contains(descLower, "mpeg-ts video file"):
-		return "video/mp2t"
-	case strings.Contains(descLower, "asf media file"):
-		return "video/x-ms-asf"
-	case strings.Contains(descLower, "gnu gettext message catalog"):
-		return "application/x-gettext-translation"
-	case strings.Contains(descLower, "g-ir binary database"):
-		return "application/octet-stream"
-	case strings.Contains(descLower, "ogg opus audio"),
-		strings.Contains(descLower, "ogg vorbis audio"),
-		strings.Contains(descLower, "ogg flac audio"),
-		descLower == "ogg data":
-		return "audio/ogg"
-	case strings.Contains(descLower, "standard midi data"):
-		return "audio/midi"
-	case strings.Contains(descLower, "vmware ova appliance"):
+	case dl == "zip archive data":
+		return "application/zip"
+
+	// AR sub-types (doAr)
+	case strings.Contains(dl, "debian binary package"):
+		return "application/vnd.debian.binary-package"
+	case dl == "ar archive":
+		return "application/x-archive"
+
+	// TAR sub-types (doTar)
+	case strings.Contains(dl, "vmware ova appliance"):
 		return "application/x-virtualbox-ova"
-	case strings.Contains(descLower, "vmware virtual disk"):
-		return "application/x-vmdk"
-	case strings.Contains(descLower, "vmware nvram file"):
-		return "application/x-vmware-nvram"
-	case strings.Contains(descLower, "vmware snapshot state"):
-		return "application/x-vmware-vmsn"
-	case strings.Contains(descLower, "vmware vm configuration"):
+	case strings.Contains(dl, "posix tar archive"):
+		return "application/x-tar"
+
+	// 3GPP variants
+	case strings.Contains(dl, "3gpp2 video file"):
+		return "video/3gpp2"
+	case strings.Contains(dl, "3gpp video file"):
+		return "video/3gpp"
+
+	// PEM variants — certificate request has a different MIME from all other PEM types
+	case strings.Contains(dl, "pem certificate request"):
+		return "application/pkcs10"
+	case strings.Contains(dl, "pem "), strings.Contains(dl, "openssh private key"):
+		return "application/x-pem-file"
+
+	// Text sub-types — check specific sub-types before the generic text prefix
+	case strings.Contains(dl, "apple mail message (emlx)"):
+		return "message/rfc822"
+	case strings.Contains(dl, "mbox mailbox"):
+		return "application/mbox"
+	case strings.Contains(dl, "markdown text"):
+		return "text/markdown"
+	case strings.Contains(dl, "openvpn config"):
+		return "application/x-openvpn-profile"
+	case strings.HasPrefix(dl, "ascii text"), strings.HasPrefix(dl, "utf-8 text"),
+		strings.HasPrefix(dl, "non-utf text"), strings.HasPrefix(dl, "unicode text, utf-16"):
 		return "text/plain"
-	case strings.Contains(descLower, "vmware supplemental configuration"):
+
+	// XML sub-type: VMware VMXF is text/plain, plain XML falls through to octet-stream
+	case strings.Contains(dl, "vmware supplemental configuration"):
 		return "text/plain"
-	case strings.Contains(descLower, "microsoft installer (msi)"):
-		return "application/x-msi"
-	case strings.Contains(descLower, "sqlite wal file"),
-		strings.Contains(descLower, "sqlite journal file"):
-		return "application/x-sqlite3"
 	}
 
 	return "application/octet-stream"

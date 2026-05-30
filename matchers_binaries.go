@@ -8,7 +8,8 @@ import (
 var matcherElf = fileMatcher{
 	name:   "elf",
 	minLen: 45,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/octet-stream",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return lenb >= 45 && HasPrefix(b, "\x7FELF")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -19,7 +20,8 @@ var matcherElf = fileMatcher{
 var matcherJavaClass = fileMatcher{
 	name:   "java-class",
 	minLen: 9,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/java",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return lenb > 8 && HasPrefix(b, "\xca\xfe\xba\xbe")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -30,7 +32,8 @@ var matcherJavaClass = fileMatcher{
 var matcherJavaSerialization = fileMatcher{
 	name:   "java-serialization",
 	minLen: 4,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/x-java-serialized-object",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return lenb >= 4 && HasPrefix(b, "\xAC\xED\x00\x05")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -41,7 +44,8 @@ var matcherJavaSerialization = fileMatcher{
 var matcherDex = fileMatcher{
 	name:   "dex",
 	minLen: 9,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/octet-stream",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return lenb > 8 && HasPrefix(b, "dex\n")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -52,7 +56,8 @@ var matcherDex = fileMatcher{
 var matcherJmod = fileMatcher{
 	name:   "jmod",
 	minLen: 4,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/x-java-jmod",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return lenb >= 4 && HasPrefix(b, "JMOD")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -63,7 +68,8 @@ var matcherJmod = fileMatcher{
 var matcherHprof = fileMatcher{
 	name:   "hprof",
 	minLen: len("JAVA PROFILE "),
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/x-java-hprof",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return lenb >= len("JAVA PROFILE ") && HasPrefix(b, "JAVA PROFILE ")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -74,7 +80,8 @@ var matcherHprof = fileMatcher{
 var matcherWasm = fileMatcher{
 	name:   "wasm",
 	minLen: 4,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/wasm",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return lenb >= 4 && HasPrefix(b, "\x00asm")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -85,7 +92,8 @@ var matcherWasm = fileMatcher{
 var matcherJavaKeyStore = fileMatcher{
 	name:   "java-keystore",
 	minLen: 12,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/x-java-keystore",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		if lenb < 12 {
 			return false
 		}
@@ -112,7 +120,8 @@ var matcherJavaKeyStore = fileMatcher{
 var matcherMacho = fileMatcher{
 	name:   "macho",
 	minLen: 33,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/x-mach-binary",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return lenb > 32 && Equal(b[1:4], "\xfa\xed\xfe")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -123,7 +132,8 @@ var matcherMacho = fileMatcher{
 var matcherLlvmBitcode = fileMatcher{
 	name:   "llvm-bitcode",
 	minLen: 5,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/octet-stream",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return lenb > 4 && HasPrefix(b, "BC\xc0\xde")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -134,7 +144,8 @@ var matcherLlvmBitcode = fileMatcher{
 var matcherPem = fileMatcher{
 	name:   "pem",
 	minLen: len("-----BEGIN "),
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "", // dynamic: certificate request → application/pkcs10, all others → application/x-pem-file
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return detectPEMDescription(b) != ""
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -145,7 +156,8 @@ var matcherPem = fileMatcher{
 var matcherPkcs12 = fileMatcher{
 	name:   "pkcs12",
 	minLen: 24,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/x-pkcs12",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		if lenb < 24 || b[0] != 0x30 {
 			return false
 		}
@@ -168,7 +180,8 @@ var matcherPkcs12 = fileMatcher{
 var matcherDerX509Cert = fileMatcher{
 	name:   "der-x509-cert",
 	minLen: 32,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/pkix-cert",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		if lenb < 32 || b[0] != 0x30 {
 			return false
 		}
@@ -192,7 +205,8 @@ var matcherDerX509Cert = fileMatcher{
 var matcherPkcs8Der = fileMatcher{
 	name:   "pkcs8-der",
 	minLen: 24,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/pkcs8",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		if lenb < 24 || b[0] != 0x30 {
 			return false
 		}
@@ -224,7 +238,8 @@ var matcherPkcs8Der = fileMatcher{
 var matcherSpkiDer = fileMatcher{
 	name:   "spki-der",
 	minLen: 20,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/pkix-key",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		if lenb < 20 || b[0] != 0x30 {
 			return false
 		}
@@ -256,7 +271,8 @@ var matcherSpkiDer = fileMatcher{
 var matcherPkcs7Der = fileMatcher{
 	name:   "pkcs7-der",
 	minLen: 20,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/pkcs7-signature",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		if lenb < 20 || b[0] != 0x30 {
 			return false
 		}
@@ -271,7 +287,8 @@ var matcherPkcs7Der = fileMatcher{
 var matcherCrdaRegdb = fileMatcher{
 	name:   "crda-regdb",
 	minLen: 8,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/octet-stream",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return lenb >= 8 && HasPrefix(b, "RGDB")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -282,7 +299,8 @@ var matcherCrdaRegdb = fileMatcher{
 var matcherPe = fileMatcher{
 	name:   "pe",
 	minLen: 64,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/vnd.microsoft.portable-executable",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return magic != -1 && HasPrefix(b, "MZ") && magic < lenb-4 &&
 			Equal(b[magic:magic+4], "\x50\x45\x00\x00")
 	},
@@ -294,7 +312,8 @@ var matcherPe = fileMatcher{
 var matcherCoffObject = fileMatcher{
 	name:   "coff-object",
 	minLen: 20,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/x-object",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return looksLikeCoffObject(b)
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -313,7 +332,8 @@ var matcherCoffObject = fileMatcher{
 var matcherIso9660 = fileMatcher{
 	name:   "iso9660",
 	minLen: 0x8006,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/x-iso9660-image",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return lenb >= 0x8006 && Equal(b[0x8001:0x8006], "CD001")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -324,7 +344,8 @@ var matcherIso9660 = fileMatcher{
 var matcherDosMbrBootSector = fileMatcher{
 	name:   "dos-mbr-boot-sector",
 	minLen: 512,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/octet-stream",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return isDosMbrBootSector(b)
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {

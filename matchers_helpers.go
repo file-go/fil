@@ -1,12 +1,15 @@
 package main
 
-import "bytes"
+import (
+	"bytes"
+	"os"
+)
 
-func readTail(n int) ([]byte, bool) {
-	if activeFile == nil || n <= 0 {
+func readTail(file *os.File, n int) ([]byte, bool) {
+	if file == nil || n <= 0 {
 		return nil, false
 	}
-	info, err := activeFile.Stat()
+	info, err := file.Stat()
 	if err != nil {
 		return nil, false
 	}
@@ -14,31 +17,31 @@ func readTail(n int) ([]byte, bool) {
 		return nil, false
 	}
 	buf := make([]byte, n)
-	_, err = activeFile.ReadAt(buf, info.Size()-int64(n))
+	_, err = file.ReadAt(buf, info.Size()-int64(n))
 	if err != nil {
 		return nil, false
 	}
 	return buf, true
 }
 
-func hasDmgTrailer() bool {
-	buf, ok := readTail(512)
+func hasDmgTrailer(file *os.File) bool {
+	buf, ok := readTail(file, 512)
 	if !ok {
 		return false
 	}
 	return bytes.HasPrefix(buf, []byte("koly"))
 }
 
-func hasParquetFooter() bool {
-	buf, ok := readTail(4)
+func hasParquetFooter(file *os.File) bool {
+	buf, ok := readTail(file, 4)
 	if !ok {
 		return false
 	}
 	return bytes.Equal(buf, []byte("PAR1"))
 }
 
-func hasArrowFooter() bool {
-	buf, ok := readTail(6)
+func hasArrowFooter(file *os.File) bool {
+	buf, ok := readTail(file, 6)
 	if !ok {
 		return false
 	}

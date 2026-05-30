@@ -8,7 +8,8 @@ import (
 var matcherXar = fileMatcher{
 	name:   "xar",
 	minLen: 28,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/x-xar",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return lenb >= 28 && HasPrefix(b, "xar!")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -19,7 +20,8 @@ var matcherXar = fileMatcher{
 var matcherAppleBom = fileMatcher{
 	name:   "apple-bom",
 	minLen: 8,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/x-apple-bom",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return lenb >= 8 && HasPrefix(b, "BOMStore")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -30,7 +32,8 @@ var matcherAppleBom = fileMatcher{
 var matcherAppleDouble = fileMatcher{
 	name:   "appledouble",
 	minLen: 4,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/applefile",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return lenb >= 4 && HasPrefix(b, "\x00\x05\x16\x07")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -41,7 +44,8 @@ var matcherAppleDouble = fileMatcher{
 var matcherApplePlistBinary = fileMatcher{
 	name:   "apple-plist-binary",
 	minLen: 8,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/x-plist",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return lenb >= 8 && HasPrefix(b, "bplist00")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -52,7 +56,8 @@ var matcherApplePlistBinary = fileMatcher{
 var matcherApplePlistXML = fileMatcher{
 	name:   "apple-plist-xml",
 	minLen: 16,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/x-plist",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		if lenb < 16 || !isText(b) {
 			return false
 		}
@@ -72,7 +77,8 @@ var matcherApplePlistXML = fileMatcher{
 var matcherDSStore = fileMatcher{
 	name:   "ds-store",
 	minLen: 8,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/octet-stream",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return lenb >= 8 && bytes.Equal(b[:8], []byte{0x00, 0x00, 0x00, 0x01, 'B', 'u', 'd', '1'})
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -83,7 +89,8 @@ var matcherDSStore = fileMatcher{
 var matcherApfs = fileMatcher{
 	name:   "apfs",
 	minLen: 36,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/octet-stream",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		if lenb < 36 {
 			return false
 		}
@@ -98,7 +105,8 @@ var matcherApfs = fileMatcher{
 var matcherHfs = fileMatcher{
 	name:   "hfs",
 	minLen: 1026,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/octet-stream",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		if lenb < 1026 {
 			return false
 		}

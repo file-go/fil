@@ -43,12 +43,24 @@ func detectTextSubtype(b []byte) string {
 		return "OpenVPN config"
 	}
 
-	if strings.HasPrefix(top, "#!/bin/sh") || strings.HasPrefix(top, "#!/bin/bash") || strings.HasPrefix(top, "#!/usr/bin/env sh") {
+	if looksLikeDockerfile(top, topLower) {
+		return "Dockerfile"
+	}
+
+	if strings.HasPrefix(top, "#!/bin/sh") || strings.HasPrefix(top, "#!/bin/bash") ||
+		strings.HasPrefix(top, "#!/usr/bin/env sh") || strings.HasPrefix(top, "#!/usr/bin/env bash") ||
+		strings.HasPrefix(top, "#!/usr/bin/zsh") || strings.HasPrefix(top, "#!/usr/bin/env zsh") ||
+		strings.HasPrefix(top, "#!/usr/bin/fish") || strings.HasPrefix(top, "#!/usr/bin/env fish") {
 		return "shell script"
 	}
 
 	if strings.HasPrefix(top, "#!/usr/bin/python") || strings.HasPrefix(top, "#!/usr/bin/env python") {
 		return "Python script"
+	}
+
+	if strings.HasPrefix(top, "#!/usr/bin/env node") || strings.HasPrefix(top, "#!/usr/bin/node") ||
+		strings.HasPrefix(top, "#!/usr/local/bin/node") {
+		return "Node.js script"
 	}
 
 	if strings.HasPrefix(top, "#!/usr/bin/ruby") || strings.HasPrefix(top, "#!/usr/bin/env ruby") {
@@ -111,6 +123,18 @@ func detectTextSubtype(b []byte) string {
 		return "Nginx config"
 	}
 
+	if looksLikeGo(top) {
+		return "Go source"
+	}
+
+	if looksLikeRust(topLower) {
+		return "Rust source"
+	}
+
+	if looksLikeJava(top, topLower) {
+		return "Java source"
+	}
+
 	if cLike := looksLikeCLang(top, topLower); cLike != "" {
 		return cLike
 	}
@@ -125,6 +149,14 @@ func detectTextSubtype(b []byte) string {
 
 	if looksLikeJavaScript(topLower) {
 		return "JavaScript"
+	}
+
+	if looksLikeTOML(top) {
+		return "TOML configuration"
+	}
+
+	if looksLikeMakefile(top) {
+		return "Makefile"
 	}
 
 	if isINI, hasExtensions := looksLikeINI(top); isINI {
@@ -1327,4 +1359,190 @@ func bitCount(v int) int {
 		count++
 	}
 	return count
+}
+
+func looksLikeGo(s string) bool {
+	lines := strings.Split(s, "\n")
+	hasPackage := false
+	hits := 0
+	for _, raw := range lines {
+		line := strings.TrimSpace(raw)
+		if line == "" || strings.HasPrefix(line, "//") {
+			continue
+		}
+		if strings.HasPrefix(line, "package ") && !hasPackage {
+			hasPackage = true
+			continue
+		}
+		if strings.HasPrefix(line, "import ") || strings.HasPrefix(line, "import(") {
+			hits++
+		}
+		if strings.HasPrefix(line, "func ") {
+			hits++
+		}
+		if strings.Contains(line, ":=") {
+			hits++
+		}
+		if strings.HasPrefix(line, "var ") || strings.HasPrefix(line, "type ") || strings.HasPrefix(line, "const ") {
+			hits++
+		}
+	}
+	return hasPackage && hits >= 1
+}
+
+func looksLikeRust(s string) bool {
+	hits := 0
+	rubySpecificAbsent := !strings.Contains(s, "\nrequire '") && !strings.Contains(s, "\nrequire \"")
+	if !rubySpecificAbsent {
+		return false
+	}
+	if strings.Contains(s, "\nfn ") || strings.Contains(s, "\npub fn ") {
+		hits++
+	}
+	if strings.Contains(s, "\nuse std::") || strings.Contains(s, "\nuse crate::") {
+		hits++
+	}
+	if strings.Contains(s, "let mut ") {
+		hits++
+	}
+	if strings.Contains(s, "\nimpl ") || strings.Contains(s, "\npub impl ") {
+		hits++
+	}
+	if strings.Contains(s, "\ntrait ") || strings.Contains(s, "\npub trait ") {
+		hits++
+	}
+	if strings.Contains(s, "#[derive(") || strings.Contains(s, "#[allow(") || strings.Contains(s, "#[cfg(") {
+		hits++
+	}
+	if strings.Contains(s, "-> ") && strings.Contains(s, "{") {
+		hits++
+	}
+	return hits >= 3
+}
+
+func looksLikeJava(s string, sLower string) bool {
+	if looksLikeCLang(s, sLower) != "" {
+		return false
+	}
+	hits := 0
+	if strings.Contains(sLower, "\npublic class ") || strings.Contains(sLower, "\npublic abstract class ") ||
+		strings.Contains(sLower, "\npublic interface ") || strings.Contains(sLower, "\npublic enum ") {
+		hits += 2
+	}
+	if strings.Contains(sLower, "\nimport java.") || strings.Contains(sLower, "\nimport javax.") ||
+		strings.Contains(sLower, "\nimport org.") || strings.Contains(sLower, "\nimport com.") ||
+		strings.Contains(sLower, "\nimport android.") {
+		hits++
+	}
+	if strings.Contains(sLower, "public static void main") {
+		hits++
+	}
+	if strings.Contains(sLower, "@override") || strings.Contains(sLower, "@suppresswarnings") {
+		hits++
+	}
+	if strings.Contains(sLower, "system.out.println") || strings.Contains(sLower, "system.err.println") {
+		hits++
+	}
+	return hits >= 2
+}
+
+func looksLikeDockerfile(s string, sLower string) bool {
+	lines := strings.Split(s, "\n")
+	directives := 0
+	hasFrom := false
+	for _, raw := range lines {
+		line := strings.TrimSpace(raw)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		upper := strings.ToUpper(line)
+		switch {
+		case strings.HasPrefix(upper, "FROM "):
+			hasFrom = true
+			directives++
+		case strings.HasPrefix(upper, "RUN "), strings.HasPrefix(upper, "COPY "),
+			strings.HasPrefix(upper, "ADD "), strings.HasPrefix(upper, "ENV "),
+			strings.HasPrefix(upper, "EXPOSE "), strings.HasPrefix(upper, "WORKDIR "),
+			strings.HasPrefix(upper, "ENTRYPOINT "), strings.HasPrefix(upper, "CMD "),
+			strings.HasPrefix(upper, "LABEL "), strings.HasPrefix(upper, "USER "),
+			strings.HasPrefix(upper, "VOLUME "), strings.HasPrefix(upper, "ARG "),
+			strings.HasPrefix(upper, "SHELL "), strings.HasPrefix(upper, "HEALTHCHECK "),
+			strings.HasPrefix(upper, "ONBUILD "), strings.HasPrefix(upper, "STOPSIGNAL "):
+			directives++
+		}
+	}
+	return hasFrom && directives >= 2
+}
+
+func looksLikeMakefile(s string) bool {
+	lines := strings.Split(s, "\n")
+	targets := 0
+	recipes := 0
+	for i, raw := range lines {
+		if len(raw) > 0 && raw[0] == '\t' {
+			recipes++
+			continue
+		}
+		line := strings.TrimSpace(raw)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		// Target or variable assignment lines.
+		if strings.Contains(line, ":") && !strings.HasPrefix(line, "http") {
+			col := strings.Index(line, ":")
+			target := strings.TrimSpace(line[:col])
+			if target != "" && !strings.Contains(target, " ") && i > 0 {
+				targets++
+			}
+		}
+	}
+	return targets >= 1 && recipes >= 2
+}
+
+func looksLikeTOML(s string) bool {
+	lines := strings.Split(s, "\n")
+	tomlHits := 0
+	keyvals := 0
+	hasArrayTable := false
+
+	for _, raw := range lines {
+		line := strings.TrimSpace(raw)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		// [[array of tables]] is unique to TOML.
+		if strings.HasPrefix(line, "[[") && strings.HasSuffix(line, "]]") {
+			hasArrayTable = true
+			tomlHits += 2
+			continue
+		}
+		// [table] header.
+		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") && !strings.HasPrefix(line, "[[") {
+			tomlHits++
+			continue
+		}
+		eq := strings.Index(line, " = ")
+		if eq <= 0 {
+			continue
+		}
+		val := strings.TrimSpace(line[eq+3:])
+		// Strongly-typed TOML values: booleans, inline arrays, inline tables, datetime.
+		if val == "true" || val == "false" {
+			tomlHits++
+			keyvals++
+		} else if strings.HasPrefix(val, "[") || strings.HasPrefix(val, "{") {
+			tomlHits++
+			keyvals++
+		} else if len(val) >= 10 && val[4] == '-' && val[7] == '-' {
+			// Date-like: 1979-05-27
+			tomlHits++
+			keyvals++
+		} else {
+			keyvals++
+		}
+	}
+	if hasArrayTable {
+		return tomlHits >= 3
+	}
+	return tomlHits >= 4 && keyvals >= 3
 }

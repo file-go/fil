@@ -10,7 +10,8 @@ import (
 var matcherBmp = fileMatcher{
 	name:   "bmp",
 	minLen: 51,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "image/bmp",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return lenb > 50 && HasPrefix(b, "BM") && Equal(b[6:10], "\x00\x00\x00\x00")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -21,7 +22,8 @@ var matcherBmp = fileMatcher{
 var matcherWmf = fileMatcher{
 	name:   "wmf",
 	minLen: 4,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "image/wmf",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		if lenb < 4 {
 			return false
 		}
@@ -40,7 +42,8 @@ var matcherWmf = fileMatcher{
 var matcherPdf = fileMatcher{
 	name:   "pdf",
 	minLen: 51,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/pdf",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return lenb > 50 && HasPrefix(b, "\x25\x50\x44\x46")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -51,7 +54,8 @@ var matcherPdf = fileMatcher{
 var matcherMobi = fileMatcher{
 	name:   "mobi",
 	minLen: 68,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/x-mobipocket-ebook",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return lenb >= 68 && Equal(b[60:68], "BOOKMOBI")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -62,7 +66,8 @@ var matcherMobi = fileMatcher{
 var matcherLit = fileMatcher{
 	name:   "lit",
 	minLen: 8,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/x-ms-reader",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return lenb >= 8 && HasPrefix(b, "ITOLITLS")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -73,7 +78,8 @@ var matcherLit = fileMatcher{
 var matcherTiff = fileMatcher{
 	name:   "tiff",
 	minLen: 17,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "image/tiff",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return lenb > 16 &&
 			(HasPrefix(b, "\x49\x49\x2a\x00") || HasPrefix(b, "\x4D\x4D\x00\x2a"))
 	},
@@ -85,7 +91,8 @@ var matcherTiff = fileMatcher{
 var matcherMsi = fileMatcher{
 	name:   "msi",
 	minLen: 32,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/x-msi",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return looksLikeMsi(b)
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -96,7 +103,8 @@ var matcherMsi = fileMatcher{
 var matcherMsAccess = fileMatcher{
 	name:   "ms-access",
 	minLen: 64,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/x-msaccess",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		if lenb < 64 || !HasPrefix(b, "\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1") {
 			return false
 		}
@@ -115,7 +123,8 @@ var matcherMsAccess = fileMatcher{
 var matcherMsg = fileMatcher{
 	name:   "msg",
 	minLen: 64,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/vnd.ms-outlook",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		if lenb < 64 || !HasPrefix(b, "\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1") {
 			return false
 		}
@@ -132,7 +141,8 @@ var matcherMsg = fileMatcher{
 var matcherOle = fileMatcher{
 	name:   "ole",
 	minLen: 33,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/x-ole-storage",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return lenb > 32 && HasPrefix(b, "\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -143,7 +153,8 @@ var matcherOle = fileMatcher{
 var matcherRtf = fileMatcher{
 	name:   "rtf",
 	minLen: 33,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/rtf",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return lenb > 32 && HasPrefix(b, "\x7B\x5C\x72\x74\x66\x31")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -151,10 +162,39 @@ var matcherRtf = fileMatcher{
 	},
 }
 
+var matcherPostScript = fileMatcher{
+	name:   "postscript",
+	minLen: 4,
+	mime:   "application/postscript",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
+		if lenb < 4 {
+			return false
+		}
+		start := b
+		// Skip UTF-8 BOM if present.
+		if len(start) >= 3 && start[0] == 0xEF && start[1] == 0xBB && start[2] == 0xBF {
+			start = start[3:]
+		}
+		return HasPrefix(start, "%!PS")
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		end := lenb
+		if end > 4096 {
+			end = 4096
+		}
+		s := string(b[:end])
+		if strings.Contains(s, "%%BoundingBox:") {
+			return "Encapsulated PostScript document"
+		}
+		return "PostScript document"
+	},
+}
+
 var matcherHtml = fileMatcher{
 	name:   "html",
 	minLen: 5,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "text/html",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return looksLikeHTMLDocument(b)
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -165,7 +205,8 @@ var matcherHtml = fileMatcher{
 var matcherXml = fileMatcher{
 	name:   "xml",
 	minLen: 5,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "", // dynamic: VMXF → text/plain, plain XML → application/octet-stream
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return looksLikeXMLDocument(b)
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -179,7 +220,8 @@ var matcherXml = fileMatcher{
 var matcherKml = fileMatcher{
 	name:   "kml",
 	minLen: 12,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/vnd.google-earth.kml+xml",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return looksLikeKMLDocument(b)
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -190,7 +232,8 @@ var matcherKml = fileMatcher{
 var matcherFb2 = fileMatcher{
 	name:   "fb2",
 	minLen: 12,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/fb2+xml",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return looksLikeFB2Document(b)
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -201,7 +244,8 @@ var matcherFb2 = fileMatcher{
 var matcherJnlp = fileMatcher{
 	name:   "jnlp",
 	minLen: 8,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/x-java-jnlp-file",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		return looksLikeJNLPDocument(b)
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
@@ -212,7 +256,8 @@ var matcherJnlp = fileMatcher{
 var matcherSvg = fileMatcher{
 	name:   "svg",
 	minLen: 5,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "image/svg+xml",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		if lenb < 5 || !isText(b) {
 			return false
 		}
@@ -238,7 +283,8 @@ var matcherSvg = fileMatcher{
 var matcherJSON = fileMatcher{
 	name:   "json",
 	minLen: 2,
-	match: func(b []byte, lenb int, magic int) bool {
+	mime:   "application/json",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
 		if lenb < 2 || !isText(b) {
 			return false
 		}

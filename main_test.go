@@ -38,7 +38,7 @@ func TestDetectFromBytes_Fixtures(t *testing.T) {
 		{name: "exr", data: []byte("\x76\x2F\x31\x01"), desc: "OpenEXR image data", mime: "image/x-exr"},
 		{name: "hdr", data: []byte("#?RADIANCE"), desc: "Radiance HDR image data", mime: "image/vnd.radiance"},
 		{name: "icns", data: append([]byte("icns"), make([]byte, 4)...), desc: "Apple icon image", mime: "image/icns"},
-		{name: "java-class", data: append([]byte("\xca\xfe\xba\xbe"), make([]byte, 8)...), desc: "Java class file", mime: "application/octet-stream"},
+		{name: "java-class", data: append([]byte("\xca\xfe\xba\xbe"), make([]byte, 8)...), desc: "Java class file", mime: "application/java"},
 		{name: "java-serialization", data: append([]byte("\xAC\xED\x00\x05"), make([]byte, 12)...), desc: "Java serialized object", mime: "application/x-java-serialized-object"},
 		{name: "dex", data: append([]byte("dex\n"), make([]byte, 8)...), desc: "Android dex file", mime: "application/octet-stream"},
 		{name: "jmod", data: append([]byte("JMOD\x00\x01"), make([]byte, 12)...), desc: "Java JMOD module", mime: "application/x-java-jmod"},
@@ -63,10 +63,10 @@ func TestDetectFromBytes_Fixtures(t *testing.T) {
 		{name: "pkcs7-der", data: append([]byte("\x30\x82\x01\x00\x06\x09\x2A\x86\x48\x86\xF7\x0D\x01\x07\x02"), make([]byte, 16)...), desc: "DER Encoded PKCS#7 Signed Data", mime: "application/pkcs7-signature"},
 		{name: "szdd", data: append([]byte("SZDD\x88\xF0\x27\x33"), make([]byte, 8)...), desc: "MS Compress archive data, SZDD variant", mime: "application/x-ms-compress"},
 		{name: "crda-regdb", data: append([]byte("RGDB\x00\x00\x00\x02"), make([]byte, 16)...), desc: "CRDA wireless regulatory database file", mime: "application/octet-stream"},
-		{name: "wasm", data: []byte("\x00asm"), desc: "WebAssembly binary", mime: "application/octet-stream"},
-		{name: "flv", data: []byte("FLV"), desc: "FLV video file", mime: "application/octet-stream"},
-		{name: "woff", data: []byte("wOFF"), desc: "WOFF font", mime: "application/octet-stream"},
-		{name: "woff2", data: []byte("wOF2"), desc: "WOFF2 font", mime: "application/octet-stream"},
+		{name: "wasm", data: []byte("\x00asm"), desc: "WebAssembly binary", mime: "application/wasm"},
+		{name: "flv", data: []byte("FLV"), desc: "FLV video file", mime: "video/x-flv"},
+		{name: "woff", data: []byte("wOFF"), desc: "WOFF font", mime: "font/woff"},
+		{name: "woff2", data: []byte("wOF2"), desc: "WOFF2 font", mime: "font/woff2"},
 		{name: "otf", data: []byte("OTTO\x00\x01\x00\x00"), desc: "OpenType font data", mime: "font/otf"},
 		{name: "eot", data: func() []byte {
 			b := make([]byte, 40)
@@ -109,7 +109,7 @@ func TestDetectFromBytes_Fixtures(t *testing.T) {
 		{name: "ewf", data: append([]byte("EVF\x09\x0D\x0A\xFF\x00"), make([]byte, 24)...), desc: "Expert Witness Compression Format (EWF) image", mime: "application/x-ewf"},
 		{name: "dwg", data: append([]byte("AC1027"), make([]byte, 18)...), desc: "AutoCAD DWG drawing", mime: "image/vnd.dwg"},
 		{name: "tiff", data: append([]byte{0x49, 0x49, 0x2A, 0x00}, make([]byte, 13)...), desc: "TIFF image data", mime: "image/tiff"},
-		{name: "mp3-id3", data: append([]byte("ID3"), make([]byte, 14)...), desc: "MP3 audio file", mime: "application/octet-stream"},
+		{name: "mp3-id3", data: append([]byte("ID3"), make([]byte, 14)...), desc: "MP3 audio file", mime: "audio/mpeg"},
 		{name: "avif", data: ftyp("avif"), desc: "AVIF image", mime: "image/avif"},
 		{name: "heif", data: ftyp("heic"), desc: "HEIF image", mime: "image/heif"},
 		{name: "jxl", data: []byte("\xFF\x0A"), desc: "JPEG XL image data", mime: "image/jxl"},
@@ -123,7 +123,7 @@ func TestDetectFromBytes_Fixtures(t *testing.T) {
 		{name: "7zip", data: append([]byte("\x37\x7A\xBC\xAF\x27\x1C"), make([]byte, 11)...), desc: "7zip archive data", mime: "application/x-7z-compressed"},
 		{name: "ico", data: append([]byte("\x00\x00\x01\x00"), make([]byte, 13)...), desc: "MS Windows icon resource", mime: "image/x-icon"},
 		{name: "cur", data: append([]byte("\x00\x00\x02\x00\x01\x00"), make([]byte, 12)...), desc: "MS Windows cursor resource", mime: "image/x-icon"},
-		{name: "sqlite", data: []byte("SQLite format 3\x00...."), desc: "SQLite database", mime: "application/octet-stream"},
+		{name: "sqlite", data: []byte("SQLite format 3\x00...."), desc: "SQLite database", mime: "application/x-sqlite3"},
 		{name: "chm", data: append([]byte("ITSF"), make([]byte, 12)...), desc: "MS Windows HtmlHelp Data", mime: "application/vnd.ms-htmlhelp"},
 		{name: "ese-db", data: func() []byte {
 			b := make([]byte, 256)
@@ -203,9 +203,9 @@ func TestDetectFromBytes_Fixtures(t *testing.T) {
 		{name: "gir-typelib", data: append([]byte("GOBJ\nMETADATA\r\n\x1A"), make([]byte, 20)...), desc: "G-IR binary database", mime: "application/octet-stream"},
 		{name: "crx", data: append([]byte("Cr24\x02\x00\x00\x00\x10\x00\x00\x00"), make([]byte, 8)...), desc: "Google Chrome extension", mime: "application/x-chrome-extension"},
 		{name: "rcc", data: append([]byte("qres"), make([]byte, 12)...), desc: "Qt Binary Resource file", mime: "application/octet-stream"},
-		{name: "flac", data: append([]byte("fLaC"), make([]byte, 13)...), desc: "FLAC audio format", mime: "application/octet-stream"},
+		{name: "flac", data: append([]byte("fLaC"), make([]byte, 13)...), desc: "FLAC audio format", mime: "audio/flac"},
 		{name: "midi", data: []byte("MThd\x00\x00\x00\x06\x00\x01\x00\x01\x01\xE0"), descLike: "Standard MIDI data (format 1)", mime: "audio/midi"},
-		{name: "cab", data: append([]byte("MSCF"), make([]byte, 13)...), desc: "Microsoft Cabinet file", mime: "application/octet-stream"},
+		{name: "cab", data: append([]byte("MSCF"), make([]byte, 13)...), desc: "Microsoft Cabinet file", mime: "application/vnd.ms-cab-compressed"},
 		{name: "psd", data: append([]byte("8BPS"), make([]byte, 13)...), desc: "Photoshop document", mime: "image/vnd.adobe.photoshop"},
 		{name: "asf", data: []byte("\x30\x26\xB2\x75\x8E\x66\xCF\x11\xA6\xD9\x00\xAA\x00\x62\xCE\x6C"), desc: "ASF media file", mime: "video/x-ms-asf"},
 		{name: "webp", data: func() []byte {
@@ -214,8 +214,8 @@ func TestDetectFromBytes_Fixtures(t *testing.T) {
 			copy(b[8:12], []byte("WEBP"))
 			return b
 		}(), desc: "Google Webp file", mime: "image/webp"},
-		{name: "rtf", data: append([]byte("{\\rtf1"), make([]byte, 27)...), desc: "Rich Text Format", mime: "application/octet-stream"},
-		{name: "html", data: []byte("<!DOCTYPE html><html><body>ok</body></html>"), desc: "HTML document", mime: "application/octet-stream"},
+		{name: "rtf", data: append([]byte("{\\rtf1"), make([]byte, 27)...), desc: "Rich Text Format", mime: "application/rtf"},
+		{name: "html", data: []byte("<!DOCTYPE html><html><body>ok</body></html>"), desc: "HTML document", mime: "text/html"},
 		{name: "binary-with-embedded-html", data: func() []byte {
 			b := make([]byte, 2600)
 			copy(b[:12], []byte{0x04, 0x00, 0x00, 0x00, 0x6A, 0x01, 0x00, 0x00, 0x01, 0xAD, 0x0D, 0x8B})
@@ -232,7 +232,7 @@ func TestDetectFromBytes_Fixtures(t *testing.T) {
 		{name: "plist-xml", data: []byte("<?xml version=\"1.0\"?><!DOCTYPE plist PUBLIC \"-//Apple Computer//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\"><plist version=\"1.0\"></plist>"), desc: "Apple property list", mime: "application/x-plist"},
 		{name: "xml-utf8-bom", data: []byte("\xEF\xBB\xBF<?xml version=\"1.0\"?><x/>"), desc: "XML document", mime: "application/octet-stream"},
 		{name: "xml-utf16le-bom", data: []byte("\xFF\xFE<\x00?\x00x\x00m\x00l\x00 \x00v\x00e\x00r\x00s\x00i\x00o\x00n\x00=\x00\"\x001\x00.\x000\x00\"\x00?\x00>\x00<\x00x\x00/\x00>\x00"), desc: "XML document", mime: "application/octet-stream"},
-		{name: "json", data: []byte("{\"a\":1,\"b\":2}"), desc: "JSON data", mime: "application/octet-stream"},
+		{name: "json", data: []byte("{\"a\":1,\"b\":2}"), desc: "JSON data", mime: "application/json"},
 		{name: "qml", data: []byte("import QtQuick 2.0\nItem {\n  property int count: 0\n}\n"), descLike: "ASCII text, QML source", mime: "text/plain"},
 		{name: "qml-import-only", data: []byte("import QtQuick 2.0\nimport QtQuick.Controls 2.5\nItem {\n  id: root\n}\n"), descLike: "QML source", mime: "text/plain"},
 		{name: "ruby-script", data: []byte("require 'json'\nclass Demo\n  def run\n    puts 'ok'\n  end\nend\n"), descLike: "Ruby script", mime: "text/plain"},
@@ -249,13 +249,41 @@ func TestDetectFromBytes_Fixtures(t *testing.T) {
 		{name: "utf8-text", data: []byte("hello, \u4e16\u754c"), desc: "UTF-8 text", mime: "text/plain"},
 		{name: "iso8859-text", data: []byte("caf\xe9 na\xefve fianc\xe9\nline two\n"), descLike: "Non-UTF text", mime: "text/plain"},
 		{name: "data-fallback", data: []byte{0x00, 0x01, 0x02, 0x03, 0x04}, desc: "data", mime: "application/octet-stream"},
+
+		// New binary formats
+		{name: "aiff", data: func() []byte {
+			b := make([]byte, 16)
+			copy(b[0:4], []byte("FORM"))
+			copy(b[8:12], []byte("AIFF"))
+			return b
+		}(), desc: "AIFF audio data", mime: "audio/aiff"},
+		{name: "aifc", data: func() []byte {
+			b := make([]byte, 16)
+			copy(b[0:4], []byte("FORM"))
+			copy(b[8:12], []byte("AIFC"))
+			return b
+		}(), desc: "AIFF-C audio data", mime: "audio/aiff"},
+		{name: "aac-adts-mpeg4", data: []byte{0xFF, 0xF1, 0x50, 0x80, 0x00, 0x1F, 0xFC}, desc: "AAC audio data", mime: "audio/aac"},
+		{name: "aac-adts-mpeg2", data: []byte{0xFF, 0xF9, 0x50, 0x80, 0x00, 0x1F, 0xFC}, desc: "AAC audio data", mime: "audio/aac"},
+		{name: "postscript", data: []byte("%!PS-Adobe-3.0\n%%Creator: test\n%%EOF\n"), desc: "PostScript document", mime: "application/postscript"},
+		{name: "eps", data: []byte("%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 200 200\n%%EOF\n"), desc: "Encapsulated PostScript document", mime: "application/postscript"},
+
+		// New text subtypes
+		{name: "go-source", data: []byte("package main\n\nimport \"fmt\"\n\nfunc main() {\n\tfmt.Println(\"hello\")\n}\n"), descLike: "Go source", mime: "text/plain"},
+		{name: "rust-source", data: []byte("use std::io;\n\nfn main() {\n\tlet mut s = String::new();\n\tio::stdin().read_line(&mut s).unwrap();\n}\n"), descLike: "Rust source", mime: "text/plain"},
+		{name: "java-source", data: []byte("import java.util.ArrayList;\n\npublic class Main {\n\tpublic static void main(String[] args) {\n\t}\n}\n"), descLike: "Java source", mime: "text/plain"},
+		{name: "dockerfile", data: []byte("FROM ubuntu:22.04\nRUN apt-get update\nCOPY . /app\nWORKDIR /app\nCMD [\"/app/start\"]\n"), descLike: "Dockerfile", mime: "text/plain"},
+		{name: "makefile", data: []byte("build:\n\tgo build ./...\n\ntest:\n\tgo test ./...\n\nclean:\n\trm -f bin/*\n"), descLike: "Makefile", mime: "text/plain"},
+		{name: "toml", data: []byte("[database]\nserver = \"192.168.1.1\"\nports = [8001, 8002]\nenabled = true\n\n[[servers]]\nhost = \"alpha\"\n"), descLike: "TOML", mime: "text/plain"},
+		{name: "shell-env-bash", data: []byte("#!/usr/bin/env bash\nset -euo pipefail\necho hello\n"), descLike: "shell script", mime: "text/plain"},
+		{name: "node-script", data: []byte("#!/usr/bin/env node\nconsole.log('hello');\n"), descLike: "Node.js script", mime: "text/plain"},
 	}
 
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got, err := detectFromBytes(tt.data, tt.name, nil)
+			got, gotMime, err := detectFromBytes(tt.data, tt.name, nil)
 			if err != nil {
 				t.Fatalf("detectFromBytes() error = %v", err)
 			}
@@ -265,8 +293,8 @@ func TestDetectFromBytes_Fixtures(t *testing.T) {
 			if tt.descLike != "" && !strings.Contains(got, tt.descLike) {
 				t.Fatalf("detectFromBytes() = %q, want substring %q", got, tt.descLike)
 			}
-			if gotMime := mimeForDescription(got); gotMime != tt.mime {
-				t.Fatalf("mimeForDescription(%q) = %q, want %q", got, gotMime, tt.mime)
+			if gotMime != tt.mime {
+				t.Fatalf("mime for %q = %q, want %q", got, gotMime, tt.mime)
 			}
 		})
 	}
@@ -292,15 +320,15 @@ func TestDetectFileType_ProjectFixtures(t *testing.T) {
 			if _, err := os.Stat(tt.path); err != nil {
 				t.Skipf("fixture unavailable: %v", err)
 			}
-			got, err := detectFileType(tt.path)
+			got, gotMime, err := detectFileType(tt.path)
 			if err != nil {
 				t.Fatalf("detectFileType(%q) error = %v", tt.path, err)
 			}
 			if !strings.Contains(got, tt.descLike) {
 				t.Fatalf("detectFileType(%q) = %q, want substring %q", tt.path, got, tt.descLike)
 			}
-			if gotMime := mimeForDescription(got); gotMime != tt.mime {
-				t.Fatalf("mimeForDescription(%q) = %q, want %q", got, gotMime, tt.mime)
+			if gotMime != tt.mime {
+				t.Fatalf("mime for %q = %q, want %q", got, gotMime, tt.mime)
 			}
 		})
 	}
@@ -319,7 +347,7 @@ func TestEmitJSON(t *testing.T) {
 		os.Stdout = oldStdout
 	}()
 
-	emitJSON("example.png", "PNG image data", true, "")
+	emitJSON("example.png", "PNG image data", true, "image/png", "")
 
 	if err := w.Close(); err != nil {
 		t.Fatalf("close writer error = %v", err)
@@ -381,176 +409,91 @@ func TestDetectFileType_ZipSubtypes(t *testing.T) {
 		return p
 	}
 
+	checkZip := func(path, wantDesc, wantMime string) {
+		t.Helper()
+		desc, mime, err := detectFileType(path)
+		if err != nil {
+			t.Fatalf("detectFileType(%s) error = %v", wantDesc, err)
+		}
+		if desc != wantDesc {
+			t.Fatalf("detectFileType(%s) desc = %q, want %q", wantDesc, desc, wantDesc)
+		}
+		if mime != wantMime {
+			t.Fatalf("detectFileType(%s) mime = %q, want %q", wantDesc, mime, wantMime)
+		}
+	}
+
 	silverlight := makeZip("sample.xap", map[string]string{
 		"AppManifest.xaml": "<Deployment />",
 		"AssemblyInfo.cs":  "class X {}",
 	})
-	desc, err := detectFileType(silverlight)
-	if err != nil {
-		t.Fatalf("detectFileType(silverlight) error = %v", err)
-	}
-	if desc != "Microsoft Silverlight Application" {
-		t.Fatalf("silverlight desc = %q, want %q", desc, "Microsoft Silverlight Application")
-	}
+	checkZip(silverlight, "Microsoft Silverlight Application", "application/x-silverlight-app")
 
 	ooxml := makeZip("sample.accdt", map[string]string{
 		"[Content_Types].xml": "<Types/>",
 		"_rels/.rels":         "<Relationships/>",
 		"docProps/core.xml":   "<cp:coreProperties/>",
 	})
-	desc, err = detectFileType(ooxml)
-	if err != nil {
-		t.Fatalf("detectFileType(ooxml) error = %v", err)
-	}
-	if desc != "Microsoft OOXML" {
-		t.Fatalf("ooxml desc = %q, want %q", desc, "Microsoft OOXML")
-	}
+	checkZip(ooxml, "Microsoft OOXML", "application/vnd.openxmlformats-officedocument")
 
 	idml := makeZip("sample.idml", map[string]string{
-		"designmap.xml": "<?xml version=\"1.0\"?><Document/>",
+		"designmap.xml":        "<?xml version=\"1.0\"?><Document/>",
 		"Stories/Story_u1.xml": "<Story/>",
 	})
-	desc, err = detectFileType(idml)
-	if err != nil {
-		t.Fatalf("detectFileType(idml) error = %v", err)
-	}
-	if desc != "Adobe InDesign IDML package" {
-		t.Fatalf("idml desc = %q, want %q", desc, "Adobe InDesign IDML package")
-	}
+	checkZip(idml, "Adobe InDesign IDML package", "application/vnd.adobe.indesign-idml-package")
 
 	apk := makeZip("sample.apk", map[string]string{
 		"AndroidManifest.xml": "<manifest package=\"example\"/>",
 		"classes.dex":         "dex\n035\x00",
 	})
-	desc, err = detectFileType(apk)
-	if err != nil {
-		t.Fatalf("detectFileType(apk) error = %v", err)
-	}
-	if desc != "Android application package (APK)" {
-		t.Fatalf("apk desc = %q, want %q", desc, "Android application package (APK)")
-	}
-	if got := mimeForDescription(desc); got != "application/vnd.android.package-archive" {
-		t.Fatalf("apk mime = %q, want %q", got, "application/vnd.android.package-archive")
-	}
+	checkZip(apk, "Android application package (APK)", "application/vnd.android.package-archive")
 
 	aab := makeZip("sample.aab", map[string]string{
 		"base/manifest/AndroidManifest.xml": "<manifest package=\"example.bundle\"/>",
 		"BundleConfig.pb":                   "bundle config",
 	})
-	desc, err = detectFileType(aab)
-	if err != nil {
-		t.Fatalf("detectFileType(aab) error = %v", err)
-	}
-	if desc != "Android app bundle (AAB)" {
-		t.Fatalf("aab desc = %q, want %q", desc, "Android app bundle (AAB)")
-	}
-	if got := mimeForDescription(desc); got != "application/vnd.android.appbundle" {
-		t.Fatalf("aab mime = %q, want %q", got, "application/vnd.android.appbundle")
-	}
+	checkZip(aab, "Android app bundle (AAB)", "application/vnd.android.appbundle")
 
 	kmz := makeZip("sample.kmz", map[string]string{
 		"doc.kml": "<kml xmlns=\"http://www.opengis.net/kml/2.2\"><Placemark/></kml>",
 	})
-	desc, err = detectFileType(kmz)
-	if err != nil {
-		t.Fatalf("detectFileType(kmz) error = %v", err)
-	}
-	if desc != "KMZ geospatial archive" {
-		t.Fatalf("kmz desc = %q, want %q", desc, "KMZ geospatial archive")
-	}
-	if got := mimeForDescription(desc); got != "application/vnd.google-earth.kmz" {
-		t.Fatalf("kmz mime = %q, want %q", got, "application/vnd.google-earth.kmz")
-	}
+	checkZip(kmz, "KMZ geospatial archive", "application/vnd.google-earth.kmz")
 
 	ipsw := makeZip("sample.ipsw", map[string]string{
 		"BuildManifest.plist": "<plist version=\"1.0\"></plist>",
 		"Restore.plist":       "<plist version=\"1.0\"></plist>",
 	})
-	desc, err = detectFileType(ipsw)
-	if err != nil {
-		t.Fatalf("detectFileType(ipsw) error = %v", err)
-	}
-	if desc != "Apple IPSW firmware package" {
-		t.Fatalf("ipsw desc = %q, want %q", desc, "Apple IPSW firmware package")
-	}
-	if got := mimeForDescription(desc); got != "application/x-ipsw" {
-		t.Fatalf("ipsw mime = %q, want %q", got, "application/x-ipsw")
-	}
+	checkZip(ipsw, "Apple IPSW firmware package", "application/x-ipsw")
 
 	jar := makeZip("sample.jar", map[string]string{
-		"META-INF/MANIFEST.MF": "Manifest-Version: 1.0\n",
+		"META-INF/MANIFEST.MF":  "Manifest-Version: 1.0\n",
 		"com/example/App.class": "dummy",
 	})
-	desc, err = detectFileType(jar)
-	if err != nil {
-		t.Fatalf("detectFileType(jar) error = %v", err)
-	}
-	if desc != "Java JAR archive" {
-		t.Fatalf("jar desc = %q, want %q", desc, "Java JAR archive")
-	}
-	if got := mimeForDescription(desc); got != "application/java-archive" {
-		t.Fatalf("jar mime = %q, want %q", got, "application/java-archive")
-	}
+	checkZip(jar, "Java JAR archive", "application/java-archive")
 
 	war := makeZip("sample.war", map[string]string{
 		"WEB-INF/web.xml":      "<web-app/>",
 		"META-INF/MANIFEST.MF": "Manifest-Version: 1.0\n",
 	})
-	desc, err = detectFileType(war)
-	if err != nil {
-		t.Fatalf("detectFileType(war) error = %v", err)
-	}
-	if desc != "Java WAR archive" {
-		t.Fatalf("war desc = %q, want %q", desc, "Java WAR archive")
-	}
-	if got := mimeForDescription(desc); got != "application/java-archive" {
-		t.Fatalf("war mime = %q, want %q", got, "application/java-archive")
-	}
+	checkZip(war, "Java WAR archive", "application/java-archive")
 
 	ear := makeZip("sample.ear", map[string]string{
 		"META-INF/application.xml": "<application/>",
 		"META-INF/MANIFEST.MF":     "Manifest-Version: 1.0\n",
 	})
-	desc, err = detectFileType(ear)
-	if err != nil {
-		t.Fatalf("detectFileType(ear) error = %v", err)
-	}
-	if desc != "Java EAR archive" {
-		t.Fatalf("ear desc = %q, want %q", desc, "Java EAR archive")
-	}
-	if got := mimeForDescription(desc); got != "application/java-archive" {
-		t.Fatalf("ear mime = %q, want %q", got, "application/java-archive")
-	}
+	checkZip(ear, "Java EAR archive", "application/java-archive")
 
 	nupkg := makeZip("sample.nupkg", map[string]string{
 		"[Content_Types].xml": "<Types/>",
 		"sample.nuspec":       "<package></package>",
 	})
-	desc, err = detectFileType(nupkg)
-	if err != nil {
-		t.Fatalf("detectFileType(nupkg) error = %v", err)
-	}
-	if desc != "NuGet package (NUPKG)" {
-		t.Fatalf("nupkg desc = %q, want %q", desc, "NuGet package (NUPKG)")
-	}
-	if got := mimeForDescription(desc); got != "application/vnd.nuget.package" {
-		t.Fatalf("nupkg mime = %q, want %q", got, "application/vnd.nuget.package")
-	}
+	checkZip(nupkg, "NuGet package (NUPKG)", "application/vnd.nuget.package")
 
 	vsix := makeZip("sample.vsix", map[string]string{
 		"extension.vsixmanifest": "<PackageManifest/>",
 		"[Content_Types].xml":    "<Types/>",
 	})
-	desc, err = detectFileType(vsix)
-	if err != nil {
-		t.Fatalf("detectFileType(vsix) error = %v", err)
-	}
-	if desc != "Visual Studio extension package (VSIX)" {
-		t.Fatalf("vsix desc = %q, want %q", desc, "Visual Studio extension package (VSIX)")
-	}
-	if got := mimeForDescription(desc); got != "application/vsix" {
-		t.Fatalf("vsix mime = %q, want %q", got, "application/vsix")
-	}
+	checkZip(vsix, "Visual Studio extension package (VSIX)", "application/vsix")
 }
 
 func TestDetectFileType_DebianArSubtype(t *testing.T) {
@@ -592,7 +535,7 @@ func TestDetectFileType_DebianArSubtype(t *testing.T) {
 		t.Fatalf("file close error = %v", err)
 	}
 
-	desc, err := detectFileType(p)
+	desc, mime, err := detectFileType(p)
 	if err != nil {
 		t.Fatalf("detectFileType(deb) error = %v", err)
 	}
@@ -600,9 +543,8 @@ func TestDetectFileType_DebianArSubtype(t *testing.T) {
 	if desc != want {
 		t.Fatalf("deb desc = %q, want %q", desc, want)
 	}
-
-	if got := mimeForDescription(desc); got != "application/vnd.debian.binary-package" {
-		t.Fatalf("deb mime = %q, want %q", got, "application/vnd.debian.binary-package")
+	if mime != "application/vnd.debian.binary-package" {
+		t.Fatalf("deb mime = %q, want %q", mime, "application/vnd.debian.binary-package")
 	}
 }
 
@@ -610,14 +552,14 @@ func TestDetectFromBytes_GlibcLocalePathFallback(t *testing.T) {
 	t.Parallel()
 
 	bin := []byte{0x00, 0x01, 0xB0, 0x7F, 0x00, 0x10}
-	got, err := detectFromBytes(bin, "/usr/lib/locale/en_GB.utf8/LC_ADDRESS", nil)
+	got, mime, err := detectFromBytes(bin, "/usr/lib/locale/en_GB.utf8/LC_ADDRESS", nil)
 	if err != nil {
 		t.Fatalf("detectFromBytes(glibc locale) error = %v", err)
 	}
 	if got != "glibc locale file LC_ADDRESS" {
 		t.Fatalf("detectFromBytes(glibc locale) = %q, want %q", got, "glibc locale file LC_ADDRESS")
 	}
-	if mime := mimeForDescription(got); mime != "application/octet-stream" {
-		t.Fatalf("mimeForDescription(glibc locale) = %q, want %q", mime, "application/octet-stream")
+	if mime != "application/octet-stream" {
+		t.Fatalf("mime(glibc locale) = %q, want %q", mime, "application/octet-stream")
 	}
 }

@@ -1,3 +1,3 @@
 module github.com/file-go/fil
 
-go 1.20
+go 1.24
