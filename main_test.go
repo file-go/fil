@@ -254,6 +254,13 @@ func TestDetectFromBytes_Fixtures(t *testing.T) {
 		{name: "iso8859-text", data: []byte("caf\xe9 na\xefve fianc\xe9\nline two\n"), descLike: "Non-UTF text", mime: "text/plain"},
 		{name: "data-fallback", data: []byte{0x00, 0x01, 0x02, 0x03, 0x04}, desc: "data", mime: "application/octet-stream"},
 
+		// New binary formats: disk / firmware
+		{name: "gpt", data: func() []byte { b := make([]byte, 524); copy(b[512:], []byte("EFI PART")); return b }(), desc: "GUID Partition Table disk image", mime: "application/octet-stream"},
+		{name: "ext2", data: func() []byte { b := make([]byte, 1082); b[1080] = 0x53; b[1081] = 0xEF; return b }(), desc: "Linux ext2 filesystem", mime: "application/octet-stream"},
+		{name: "ext4", data: func() []byte { b := make([]byte, 1124); b[1080] = 0x53; b[1081] = 0xEF; b[1120] = 0x40; return b }(), desc: "Linux ext4 filesystem", mime: "application/octet-stream"},
+		{name: "uboot", data: append([]byte("\x27\x05\x19\x56"), make([]byte, 12)...), desc: "U-Boot legacy image", mime: "application/octet-stream"},
+		{name: "arj", data: func() []byte { b := make([]byte, 32); b[0] = 0x60; b[1] = 0xEA; b[2] = 0x1A; b[3] = 0x00; return b }(), desc: "ARJ archive", mime: "application/x-arj"},
+
 		// Binary: archive/compression
 		{name: "cpio-newc", data: []byte("070701" + string(make([]byte, 20))), desc: "CPIO archive (SVR4 no CRC)", mime: "application/x-cpio"},
 		{name: "cpio-crc", data: []byte("070702" + string(make([]byte, 20))), desc: "CPIO archive (SVR4 with CRC)", mime: "application/x-cpio"},
@@ -287,6 +294,16 @@ func TestDetectFromBytes_Fixtures(t *testing.T) {
 		{name: "aac-adts-mpeg2", data: []byte{0xFF, 0xF9, 0x50, 0x80, 0x00, 0x1F, 0xFC}, desc: "AAC audio data", mime: "audio/aac"},
 		{name: "postscript", data: []byte("%!PS-Adobe-3.0\n%%Creator: test\n%%EOF\n"), desc: "PostScript document", mime: "application/postscript"},
 		{name: "eps", data: []byte("%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 200 200\n%%EOF\n"), desc: "Encapsulated PostScript document", mime: "application/postscript"},
+
+		// Text subtype quality: YAML list-heavy and mixed docs
+		{name: "yaml-pure-list", data: []byte("---\n- ubuntu-latest\n- windows-latest\n- macos-latest\n- ubuntu-20.04\n"), descLike: "YAML", mime: "text/plain"},
+		{name: "yaml-mixed", data: []byte("name: myapp\nsteps:\n  - uses: actions/checkout@v4\n  - run: go build\n  - run: go test\n"), descLike: "YAML", mime: "text/plain"},
+		// Text subtype quality: properties / env
+		{name: "env-file", data: []byte("DATABASE_URL=postgres://localhost/mydb\nAPI_KEY=abc123xyz\nPORT=3000\nNODE_ENV=production\n"), descLike: "environment variable file", mime: "text/plain"},
+		{name: "java-properties", data: []byte("spring.datasource.url=jdbc:postgresql://localhost:5432/mydb\nspring.datasource.username=admin\nserver.port=8080\nlogging.level.root=INFO\n"), descLike: "Java properties file", mime: "text/plain"},
+		// Text subtype quality: TypeScript-specific markers
+		{name: "typescript-declare", data: []byte("declare module 'foo' {\n  export interface Bar { id: number; name: string; }\n  export function baz(): void;\n}\n"), descLike: "TypeScript", mime: "text/plain"},
+		{name: "typescript-readonly", data: []byte("export class Config {\n  readonly apiUrl: string;\n  readonly timeout: number;\n  constructor(url: string) { this.apiUrl = url; this.timeout = 30; }\n}\n"), descLike: "TypeScript", mime: "text/plain"},
 
 		// Text subtypes: new languages and formats
 		{name: "sql-ddl", data: []byte("CREATE TABLE users (\n  id INTEGER PRIMARY KEY,\n  name VARCHAR(255) NOT NULL\n);\nCREATE INDEX idx_name ON users(name);\n"), descLike: "SQL script", mime: "text/plain"},

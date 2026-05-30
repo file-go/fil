@@ -303,6 +303,23 @@ var matcher7zip = fileMatcher{
 	},
 }
 
+var matcherArj = fileMatcher{
+	name:   "arj",
+	minLen: 11,
+	mime:   "application/x-arj",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
+		if lenb < 11 || !HasPrefix(b, "\x60\xEA") {
+			return false
+		}
+		// Sanity-check the basic header size field (bytes 2–3 LE) to reduce false positives.
+		headerSize := int(b[2]) | int(b[3])<<8
+		return headerSize >= 26 && headerSize <= 2600
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "ARJ archive"
+	},
+}
+
 var matcherCpio = fileMatcher{
 	name:   "cpio",
 	minLen: 6,

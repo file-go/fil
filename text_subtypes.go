@@ -187,6 +187,14 @@ func detectTextSubtype(b []byte) string {
 		return "HCL/Terraform configuration"
 	}
 
+	if looksLikeEnvFile(top) {
+		return "environment variable file"
+	}
+
+	if looksLikeJavaProperties(top) {
+		return "Java properties file"
+	}
+
 	if isINI, hasExtensions := looksLikeINI(top); isINI {
 		if hasExtensions {
 			return "Generic INItialization configuration [extensions]"
@@ -472,6 +480,22 @@ func looksLikeTypeScript(s string) bool {
 		hits++
 	}
 	if strings.Contains(s, " as const") {
+		hits++
+	}
+	// Additional TS-specific markers.
+	if strings.Contains(s, "\nreadonly ") || strings.Contains(s, " readonly ") {
+		hits++
+	}
+	if strings.Contains(s, "\ndeclare ") {
+		hits++
+	}
+	if strings.Contains(s, "import type ") {
+		hits++
+	}
+	if strings.Contains(s, "\nnamespace ") {
+		hits++
+	}
+	if strings.Contains(s, "<T>") || strings.Contains(s, "<T,") || strings.Contains(s, "<T extends ") {
 		hits++
 	}
 	return hits >= 2
@@ -1022,7 +1046,13 @@ func isLikelyINIIdentifier(s string) bool {
 
 func looksLikeYAML(s string) bool {
 	lines := strings.Split(s, "\n")
+	const maxLines = 200
+	if len(lines) > maxLines {
+		lines = lines[:maxLines]
+	}
+
 	keyValLines := 0
+	listLines := 0
 	startMarker := false
 	firstNonEmptySeen := false
 	nonEmpty := 0
@@ -1033,45 +1063,73 @@ func looksLikeYAML(s string) bool {
 			continue
 		}
 		nonEmpty++
-		if line == "---" {
+
+		// Document start/end markers.
+		if line == "---" || line == "..." {
 			if !firstNonEmptySeen {
 				startMarker = true
 			}
 			firstNonEmptySeen = true
 			continue
 		}
-		if !firstNonEmptySeen {
-			firstNonEmptySeen = true
-		}
-		if strings.HasPrefix(line, "- ") {
+		firstNonEmptySeen = true
+
+		// Sequence items at any indentation level.
+		if strings.HasPrefix(line, "- ") || line == "-" {
+			listLines++
+			// The item value may itself be an inline mapping.
+			rest := strings.TrimSpace(strings.TrimPrefix(line, "- "))
+			if isYAMLKeyValueLine(rest) {
+				keyValLines++
+			}
 			continue
 		}
 
-		colon := strings.Index(line, ":")
-		if colon <= 0 {
-			continue
+		if isYAMLKeyValueLine(line) {
+			keyValLines++
 		}
-		// Ignore URLs and obvious non-YAML tokens that tend to be false positives.
-		if strings.Contains(line, "://") || strings.Contains(line, "{") || strings.Contains(line, "}") || strings.Contains(line, ";") {
-			continue
-		}
-		key := strings.TrimSpace(line[:colon])
-		value := strings.TrimSpace(line[colon+1:])
-		if key == "" || value == "" || !isLikelyYAMLKey(key) {
-			continue
-		}
-		keyValLines++
 	}
 
 	if nonEmpty == 0 {
 		return false
 	}
+
+	structured := keyValLines + listLines
+	structuredRatio := float64(structured) / float64(nonEmpty)
 	keyRatio := float64(keyValLines) / float64(nonEmpty)
 
-	if startMarker && keyValLines >= 1 && keyRatio >= 0.2 {
+	if startMarker {
+		// Explicit document marker — accept both mapping-heavy and list-heavy docs.
+		if keyValLines >= 1 && keyRatio >= 0.15 {
+			return true
+		}
+		if listLines >= 3 && structuredRatio >= 0.5 {
+			return true
+		}
+	}
+
+	// No marker — require denser evidence to avoid false positives on prose.
+	if keyValLines >= 3 && keyRatio >= 0.6 {
 		return true
 	}
-	return keyValLines >= 3 && keyRatio >= 0.6
+	// Mixed mapping + sequence structure without a marker.
+	return keyValLines >= 2 && listLines >= 2 && structuredRatio >= 0.5
+}
+
+func isYAMLKeyValueLine(line string) bool {
+	if line == "" {
+		return false
+	}
+	colon := strings.Index(line, ":")
+	if colon <= 0 {
+		return false
+	}
+	if strings.Contains(line, "://") || strings.Contains(line, "{") ||
+		strings.Contains(line, "}") || strings.Contains(line, ";") {
+		return false
+	}
+	key := strings.TrimSpace(line[:colon])
+	return key != "" && isLikelyYAMLKey(key)
 }
 
 func detectDelimitedSubtype(s string) string {
@@ -1628,6 +1686,68 @@ func looksLikeTOML(s string) bool {
 		return tomlHits >= 3
 	}
 	return tomlHits >= 4 && keyvals >= 3
+}
+
+func looksLikeEnvFile(s string) bool {
+	lines := strings.Split(s, "\n")
+	validLines := 0
+	nonComment := 0
+	for _, raw := range lines {
+		line := strings.TrimSpace(raw)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		nonComment++
+		eq := strings.Index(line, "=")
+		if eq <= 0 {
+			return false
+		}
+		key := line[:eq]
+		hasUpper := false
+		for _, c := range key {
+			switch {
+			case c >= 'A' && c <= 'Z':
+				hasUpper = true
+			case c >= '0' && c <= '9', c == '_':
+				// OK
+			default:
+				return false
+			}
+		}
+		if !hasUpper {
+			return false
+		}
+		validLines++
+	}
+	return nonComment >= 3 && validLines == nonComment
+}
+
+func looksLikeJavaProperties(s string) bool {
+	lines := strings.Split(s, "\n")
+	dotKeyLines := 0
+	totalKeyLines := 0
+	nonComment := 0
+	for _, raw := range lines {
+		line := strings.TrimSpace(raw)
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "!") {
+			continue
+		}
+		nonComment++
+		eq := strings.IndexAny(line, "=:")
+		if eq <= 0 {
+			return false
+		}
+		key := strings.TrimSpace(line[:eq])
+		if key == "" {
+			continue
+		}
+		totalKeyLines++
+		if strings.Contains(key, ".") {
+			dotKeyLines++
+		}
+	}
+	// Require dot-separated keys in at least half the lines.
+	return nonComment >= 3 && totalKeyLines == nonComment && dotKeyLines*2 >= nonComment
 }
 
 func looksLikeSQL(s string) bool {

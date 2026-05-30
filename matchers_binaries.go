@@ -341,6 +341,57 @@ var matcherIso9660 = fileMatcher{
 	},
 }
 
+var matcherGpt = fileMatcher{
+	name:   "gpt",
+	minLen: 520,
+	mime:   "application/octet-stream",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
+		// GPT header starts at LBA 1 (byte offset 512). Must run before MBR matcher.
+		return lenb >= 520 && Equal(b[512:520], "EFI PART")
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "GUID Partition Table disk image"
+	},
+}
+
+var matcherExt234 = fileMatcher{
+	name:   "ext234",
+	minLen: 1082,
+	mime:   "application/octet-stream",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
+		// ext2/3/4 superblock starts at byte 1024; magic \x53\xEF is at offset 56 within it.
+		return lenb >= 1082 && b[1080] == 0x53 && b[1081] == 0xEF
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		if lenb < 1124 {
+			return "Linux ext2 filesystem"
+		}
+		featCompat := peekLe(b[1116:], 4)
+		featIncompat := peekLe(b[1120:], 4)
+		// EXT4_FEATURE_INCOMPAT_EXTENTS=0x40, EXT4_FEATURE_INCOMPAT_64BIT=0x80
+		if featIncompat&0xC0 != 0 {
+			return "Linux ext4 filesystem"
+		}
+		// EXT3_FEATURE_COMPAT_HAS_JOURNAL=0x4
+		if featCompat&0x4 != 0 {
+			return "Linux ext3 filesystem"
+		}
+		return "Linux ext2 filesystem"
+	},
+}
+
+var matcherUboot = fileMatcher{
+	name:   "uboot",
+	minLen: 4,
+	mime:   "application/octet-stream",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
+		return lenb >= 4 && HasPrefix(b, "\x27\x05\x19\x56")
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "U-Boot legacy image"
+	},
+}
+
 var matcherLuks = fileMatcher{
 	name:   "luks",
 	minLen: 6,
