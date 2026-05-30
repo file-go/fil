@@ -633,21 +633,76 @@ func minInt(a int, b int) int {
 
 func looksLikePowerShell(s string) bool {
 	hits := 0
+
+	// Named block structure.
 	if strings.Contains(s, "\nfunction ") {
 		hits++
 	}
-	if strings.Contains(s, "\nparam(") {
+	if strings.Contains(s, "\nparam(") || strings.Contains(s, "\nparam (") {
 		hits++
 	}
 	if strings.Contains(s, "\n$") {
 		hits++
 	}
-	if strings.Contains(s, "write-host") || strings.Contains(s, "write-output") {
+
+	// Write-* family.
+	if strings.Contains(s, "write-host") || strings.Contains(s, "write-output") ||
+		strings.Contains(s, "write-verbose") || strings.Contains(s, "write-error") {
 		hits++
 	}
-	if strings.Contains(s, "get-") || strings.Contains(s, "set-") || strings.Contains(s, "new-") {
+
+	// [CmdletBinding()] and [Parameter(] are PS-specific attributes.
+	if strings.Contains(s, "[cmdletbinding(") || strings.Contains(s, "[parameter(") {
+		hits += 2
+	}
+
+	// begin/process/end are PS advanced-function block keywords.
+	if strings.Contains(s, "\nbegin {") || strings.Contains(s, "\nprocess {") || strings.Contains(s, "\nend {") {
 		hits++
 	}
+
+	// PS automatic variables — fully unique to PowerShell.
+	if strings.Contains(s, "$psscriptroot") || strings.Contains(s, "$pscommandpath") ||
+		strings.Contains(s, "$psversiontable") {
+		hits += 2
+	}
+
+	// $env: colon-in-variable-name syntax is unique to PowerShell.
+	if strings.Contains(s, "$env:") {
+		hits += 2
+	}
+
+	// PS common parameters not found in other languages.
+	if strings.Contains(s, "-erroraction") || strings.Contains(s, "-whatif") {
+		hits += 2
+	}
+
+	// Pipeline variable and PS-specific boolean/null literals.
+	if strings.Contains(s, "$_") || strings.Contains(s, "$true") ||
+		strings.Contains(s, "$false") || strings.Contains(s, "$null") {
+		hits++
+	}
+
+	// -join / -split are PS binary operators (spaces required to avoid word fragments).
+	if strings.Contains(s, " -join ") || strings.Contains(s, " -split ") {
+		hits++
+	}
+
+	// @{} hashtable and @() array subexpression literals — PS-specific syntax.
+	if strings.Contains(s, "@{") || strings.Contains(s, "@(") {
+		hits++
+	}
+
+	// Broad Verb-Noun cmdlet pattern.
+	if strings.Contains(s, "get-") || strings.Contains(s, "set-") || strings.Contains(s, "new-") ||
+		strings.Contains(s, "remove-") || strings.Contains(s, "stop-") || strings.Contains(s, "start-") ||
+		strings.Contains(s, "invoke-") || strings.Contains(s, "test-") || strings.Contains(s, "add-") ||
+		strings.Contains(s, "where-object") || strings.Contains(s, "foreach-object") ||
+		strings.Contains(s, "select-object") || strings.Contains(s, "sort-object") ||
+		strings.Contains(s, "import-") || strings.Contains(s, "out-") {
+		hits++
+	}
+
 	return hits >= 2
 }
 

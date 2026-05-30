@@ -244,6 +244,10 @@ func TestDetectFromBytes_Fixtures(t *testing.T) {
 		{name: "perl-nonutf-shebang", data: append([]byte("#!/usr/bin/perl\nprint \"ok\";\n# "), 0xE9), descLike: "Perl script", mime: "text/plain"},
 		{name: "powershell-leading-comment-block", data: []byte("<#\n.SYNOPSIS\nExample\n#>\nfunction Invoke-Test {\n  param([string]$Path)\n  Write-Host $Path\n}\n"), descLike: "PowerShell script", mime: "text/plain"},
 		{name: "powershell-not-ini", data: []byte("[CmdletBinding()]\nparam(\n[string]$Name = \"x\"\n)\n"), descLike: "PowerShell script", mime: "text/plain"},
+		// Cmdlet-only script: no function/param/line-start $, but has $env:, -ErrorAction, $_, Verb-Noun.
+		{name: "powershell-cmdlets-only", data: []byte("Get-ChildItem -Path C:\\Logs | Where-Object { $_.Length -gt 0 }\nRemove-Item -Path $env:TEMP\\cache -Recurse -ErrorAction SilentlyContinue\n"), descLike: "PowerShell script", mime: "text/plain"},
+		// @{} hashtable and [CmdletBinding()] attribute.
+		{name: "powershell-hashtable", data: []byte("[CmdletBinding()]\nparam([string]$Name)\n$opts = @{ Recurse = $true; Force = $true }\nWrite-Verbose \"Running with $Name\"\n"), descLike: "PowerShell script", mime: "text/plain"},
 		{name: "not-ini-weak-structure", data: []byte("[OnlySection]\nnotes line without equals\njust text\nk=v\n"), descLike: "ASCII text", mime: "text/plain"},
 		{name: "ascii-text", data: []byte("hello world"), desc: "ASCII text", mime: "text/plain"},
 		{name: "utf8-text", data: []byte("hello, \u4e16\u754c"), desc: "UTF-8 text", mime: "text/plain"},
