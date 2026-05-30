@@ -458,6 +458,15 @@ func dynamicMIME(desc string) string {
 	case strings.Contains(dl, "3gpp video file"):
 		return "video/3gpp"
 
+	// PGP variants
+	case strings.Contains(dl, "pgp public key"), strings.Contains(dl, "pgp private key"),
+		strings.Contains(dl, "pgp armored"), strings.Contains(dl, "pgp binary"):
+		return "application/pgp-keys"
+	case strings.Contains(dl, "pgp message"), strings.Contains(dl, "pgp signed message"):
+		return "application/pgp-encrypted"
+	case strings.Contains(dl, "pgp signature"):
+		return "application/pgp-signature"
+
 	// PEM variants — certificate request has a different MIME from all other PEM types
 	case strings.Contains(dl, "pem certificate request"):
 		return "application/pkcs10"

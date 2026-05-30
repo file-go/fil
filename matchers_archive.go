@@ -303,6 +303,70 @@ var matcher7zip = fileMatcher{
 	},
 }
 
+var matcherCpio = fileMatcher{
+	name:   "cpio",
+	minLen: 6,
+	mime:   "application/x-cpio",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
+		if lenb >= 6 && (HasPrefix(b, "070701") || HasPrefix(b, "070702") || HasPrefix(b, "070707")) {
+			return true
+		}
+		return lenb >= 2 && (HasPrefix(b, "\xC7\x71") || HasPrefix(b, "\x71\xC7"))
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		switch {
+		case HasPrefix(b, "070701"):
+			return "CPIO archive (SVR4 no CRC)"
+		case HasPrefix(b, "070702"):
+			return "CPIO archive (SVR4 with CRC)"
+		case HasPrefix(b, "070707"):
+			return "CPIO archive (portable ASCII)"
+		default:
+			return "CPIO archive"
+		}
+	},
+}
+
+var matcherLzh = fileMatcher{
+	name:   "lzh",
+	minLen: 7,
+	mime:   "application/x-lzh-compressed",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
+		// LHA/LZH header: [size][checksum]-lhX- where X is 0-9 or a-e
+		return lenb >= 7 && b[2] == '-' && b[3] == 'l' && b[4] == 'h' && b[6] == '-'
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "LHa archive"
+	},
+}
+
+var matcherSquashfs = fileMatcher{
+	name:   "squashfs",
+	minLen: 4,
+	mime:   "application/x-squashfs",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
+		return lenb >= 4 && (HasPrefix(b, "sqsh") || HasPrefix(b, "hsqs") ||
+			HasPrefix(b, "sqlz") || HasPrefix(b, "qshs"))
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "Squashfs filesystem"
+	},
+}
+
+var matcherZlib = fileMatcher{
+	name:   "zlib",
+	minLen: 2,
+	mime:   "application/zlib",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
+		// First byte 0x78 = deflate with 32KB window; second byte must satisfy
+		// (CMF*256 + FLG) % 31 == 0. Common values: 0x789C, 0x78DA, 0x7801, 0x785E.
+		return lenb >= 2 && b[0] == 0x78 && (uint16(b[0])<<8+uint16(b[1]))%31 == 0
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "zlib compressed data"
+	},
+}
+
 var matcherCab = fileMatcher{
 	name:   "cab",
 	minLen: 17,

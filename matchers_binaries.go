@@ -341,6 +341,73 @@ var matcherIso9660 = fileMatcher{
 	},
 }
 
+var matcherLuks = fileMatcher{
+	name:   "luks",
+	minLen: 6,
+	mime:   "application/x-luks",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
+		return lenb >= 6 && HasPrefix(b, "LUKS\xBA\xBE")
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "LUKS encrypted volume"
+	},
+}
+
+var matcherDtb = fileMatcher{
+	name:   "dtb",
+	minLen: 4,
+	mime:   "application/x-dtb",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
+		return lenb >= 4 && HasPrefix(b, "\xD0\x0D\xFE\xED")
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "Device Tree Blob"
+	},
+}
+
+var matcherAndroidBoot = fileMatcher{
+	name:   "android-boot",
+	minLen: 8,
+	mime:   "application/vnd.android.boot-image",
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
+		return lenb >= 8 && HasPrefix(b, "ANDROID!")
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		return "Android boot image"
+	},
+}
+
+var matcherPgp = fileMatcher{
+	name:   "pgp",
+	minLen: 15,
+	mime:   "", // dynamic: keys, messages, signatures have different MIMEs
+	match: func(b []byte, lenb int, magic int, _ *os.File) bool {
+		if lenb >= 15 && HasPrefix(b, "-----BEGIN PGP ") {
+			return true
+		}
+		// Binary OpenPGP: 0x99 is old-format public-key packet (most common export)
+		return lenb >= 3 && b[0] == 0x99 && b[1] != 0x00
+	},
+	describe: func(b []byte, lenb int, magic int, file *os.File) string {
+		switch {
+		case HasPrefix(b, "-----BEGIN PGP PUBLIC KEY BLOCK-----"):
+			return "PGP public key block"
+		case HasPrefix(b, "-----BEGIN PGP PRIVATE KEY BLOCK-----"):
+			return "PGP private key block"
+		case HasPrefix(b, "-----BEGIN PGP SIGNED MESSAGE-----"):
+			return "PGP signed message"
+		case HasPrefix(b, "-----BEGIN PGP MESSAGE-----"):
+			return "PGP message"
+		case HasPrefix(b, "-----BEGIN PGP SIGNATURE-----"):
+			return "PGP signature"
+		case HasPrefix(b, "-----BEGIN PGP "):
+			return "PGP armored data"
+		default:
+			return "PGP binary data"
+		}
+	},
+}
+
 var matcherDosMbrBootSector = fileMatcher{
 	name:   "dos-mbr-boot-sector",
 	minLen: 512,

@@ -75,8 +75,16 @@ func detectTextSubtype(b []byte) string {
 		return "Ruby script"
 	}
 
+	if looksLikeLua(topLower) {
+		return "Lua script"
+	}
+
 	if looksLikePython(topLower) {
 		return "Python script"
+	}
+
+	if looksLikeR(topLower) {
+		return "R script"
 	}
 
 	if strings.Contains(topLower, "\n#requires") || strings.Contains(topLower, "\nparam(") || strings.Contains(topLower, "\nparam\n(") || strings.Contains(topLower, "$psversiontable") {
@@ -135,8 +143,20 @@ func detectTextSubtype(b []byte) string {
 		return "Java source"
 	}
 
+	if looksLikeProto(topLower) {
+		return "Protocol Buffers source"
+	}
+
 	if cLike := looksLikeCLang(top, topLower); cLike != "" {
 		return cLike
+	}
+
+	if looksLikeCMake(topLower) {
+		return "CMake script"
+	}
+
+	if looksLikeAssembly(topLower) {
+		return "assembly source"
 	}
 
 	if looksLikeBatch(topLower) {
@@ -157,6 +177,14 @@ func detectTextSubtype(b []byte) string {
 
 	if looksLikeMakefile(top) {
 		return "Makefile"
+	}
+
+	if looksLikeSQL(topLower) {
+		return "SQL script"
+	}
+
+	if looksLikeHCL(topLower) {
+		return "HCL/Terraform configuration"
 	}
 
 	if isINI, hasExtensions := looksLikeINI(top); isINI {
@@ -1600,4 +1628,270 @@ func looksLikeTOML(s string) bool {
 		return tomlHits >= 3
 	}
 	return tomlHits >= 4 && keyvals >= 3
+}
+
+func looksLikeSQL(s string) bool {
+	hits := 0
+	// DML — multi-word patterns are resistant to English prose false positives.
+	if strings.Contains(s, "\nselect ") && (strings.Contains(s, "\nfrom ") || strings.Contains(s, " from ")) {
+		hits += 2
+	}
+	if strings.Contains(s, "\ninsert into ") {
+		hits += 2
+	}
+	if strings.Contains(s, "\nupdate ") && strings.Contains(s, "\nset ") {
+		hits += 2
+	}
+	if strings.Contains(s, "\ndelete from ") {
+		hits += 2
+	}
+	// DDL
+	if strings.Contains(s, "\ncreate table") || strings.Contains(s, "\ncreate index") ||
+		strings.Contains(s, "\ncreate view") || strings.Contains(s, "\ncreate database") ||
+		strings.Contains(s, "\ncreate schema") {
+		hits += 2
+	}
+	if strings.Contains(s, "\nalter table") || strings.Contains(s, "\ndrop table") ||
+		strings.Contains(s, "\ndrop index") {
+		hits++
+	}
+	// Clauses and joins
+	if strings.Contains(s, "\nwhere ") {
+		hits++
+	}
+	if strings.Contains(s, "\ninner join") || strings.Contains(s, "\nleft join") ||
+		strings.Contains(s, "\nright join") || strings.Contains(s, " join ") {
+		hits++
+	}
+	if strings.Contains(s, "\ngroup by") || strings.Contains(s, "\norder by") {
+		hits++
+	}
+	// SQL type/constraint keywords in column definitions
+	if strings.Contains(s, " varchar(") || strings.Contains(s, " primary key") ||
+		strings.Contains(s, " not null") || strings.Contains(s, " int ") ||
+		strings.Contains(s, " integer") || strings.Contains(s, " bigint") {
+		hits++
+	}
+	return hits >= 3
+}
+
+func looksLikeHCL(s string) bool {
+	hits := 0
+	// resource and terraform blocks are the strongest Terraform signals.
+	if strings.Contains(s, "\nresource \"") {
+		hits += 2
+	}
+	if strings.Contains(s, "\nterraform {") {
+		hits += 2
+	}
+	if strings.Contains(s, "\nprovider \"") {
+		hits++
+	}
+	if strings.Contains(s, "\nvariable \"") {
+		hits++
+	}
+	if strings.Contains(s, "\noutput \"") {
+		hits++
+	}
+	if strings.Contains(s, "\nmodule \"") {
+		hits++
+	}
+	if strings.Contains(s, "\ndata \"") {
+		hits++
+	}
+	if strings.Contains(s, "\nlocals {") {
+		hits++
+	}
+	// Nomad/Consul HCL blocks
+	if strings.Contains(s, "\njob \"") || strings.Contains(s, "\ntask \"") ||
+		strings.Contains(s, "\ngroup \"") {
+		hits++
+	}
+	return hits >= 2
+}
+
+func looksLikeLua(s string) bool {
+	// Avoid misidentifying Ruby (also uses function/end/require).
+	if looksLikeRuby(s) {
+		return false
+	}
+	hits := 0
+	// Lua shebang
+	if strings.HasPrefix(s, "#!/usr/bin/lua") || strings.HasPrefix(s, "#!/usr/bin/env lua") ||
+		strings.HasPrefix(s, "#!/usr/local/bin/lua") {
+		hits += 2
+	}
+	// ~= (not-equal) and .. (concatenation) are Lua-specific operators.
+	if strings.Contains(s, " ~= ") {
+		hits += 2
+	}
+	if strings.Contains(s, " .. ") {
+		hits++
+	}
+	// Standard Lua library functions absent from other languages.
+	if strings.Contains(s, "ipairs(") || strings.Contains(s, "pairs(") || strings.Contains(s, "pcall(") ||
+		strings.Contains(s, "tostring(") || strings.Contains(s, "tonumber(") {
+		hits += 2
+	}
+	if strings.Contains(s, "\nlocal ") {
+		hits++
+	}
+	if strings.Contains(s, "\nrequire(") {
+		hits++
+	}
+	if strings.Contains(s, "\nfunction ") &&
+		(strings.Contains(s, "\nend\n") || strings.Contains(s, "\nend\r") ||
+			strings.HasSuffix(strings.TrimSpace(s), "end")) {
+		hits++
+	}
+	return hits >= 3
+}
+
+func looksLikeR(s string) bool {
+	// Arrow assignment <- is R's primary distinguishing feature.
+	hasArrow := strings.Contains(s, " <- ")
+	hasSuper := strings.Contains(s, " <<- ")
+
+	// Very R-specific data/visualisation functions are enough on their own.
+	if strings.Contains(s, "data.frame(") || strings.Contains(s, "ggplot(") ||
+		strings.Contains(s, "tibble(") || strings.Contains(s, "read.csv(") {
+		return true
+	}
+
+	if !hasArrow && !hasSuper {
+		return false
+	}
+
+	hits := 1 // arrow assignment already confirmed
+	if strings.Contains(s, "library(") || strings.Contains(s, "require(") {
+		hits++
+	}
+	if strings.Contains(s, "function(") {
+		hits++
+	}
+	if strings.Contains(s, "c(") {
+		hits++
+	}
+	if strings.Contains(s, "print(") || strings.Contains(s, "cat(") ||
+		strings.Contains(s, "str(") || strings.Contains(s, "summary(") {
+		hits++
+	}
+	return hits >= 3
+}
+
+func looksLikeProto(s string) bool {
+	// syntax = "proto2"/"proto3" appears at the top of virtually every proto file.
+	if strings.Contains(s, "syntax = \"proto") {
+		return true
+	}
+	hits := 0
+	if strings.Contains(s, "\nmessage ") {
+		hits++
+	}
+	if strings.Contains(s, "\nservice ") {
+		hits++
+	}
+	if strings.Contains(s, "\nrpc ") {
+		hits++
+	}
+	if strings.Contains(s, "\nenum ") {
+		hits++
+	}
+	if strings.Contains(s, "\npackage ") {
+		hits++
+	}
+	// Proto field number assignments: "  string name = 1;"
+	if strings.Contains(s, " = 1;") || strings.Contains(s, " = 2;") || strings.Contains(s, " = 3;") {
+		hits++
+	}
+	return hits >= 3
+}
+
+func looksLikeCMake(s string) bool {
+	// cmake_minimum_required is the conventional first line of every CMakeLists.txt.
+	if strings.Contains(s, "cmake_minimum_required(") {
+		return true
+	}
+	hits := 0
+	if strings.Contains(s, "project(") {
+		hits++
+	}
+	if strings.Contains(s, "add_executable(") || strings.Contains(s, "add_library(") {
+		hits++
+	}
+	if strings.Contains(s, "target_link_libraries(") || strings.Contains(s, "target_include_directories(") {
+		hits++
+	}
+	if strings.Contains(s, "find_package(") {
+		hits++
+	}
+	if strings.Contains(s, "${cmake_") || strings.Contains(s, "set(cmake_") {
+		hits++
+	}
+	if strings.Contains(s, "install(") && strings.Contains(s, "targets") {
+		hits++
+	}
+	return hits >= 2
+}
+
+func looksLikeAssembly(s string) bool {
+	hits := 0
+
+	// GAS/AT&T assembler directives.
+	if strings.Contains(s, "\n.text\n") || strings.Contains(s, "\n\t.text\n") ||
+		strings.Contains(s, "\n.section ") || strings.Contains(s, "\n\t.section ") {
+		hits++
+	}
+	if strings.Contains(s, ".global ") || strings.Contains(s, ".globl ") {
+		hits++
+	}
+	if strings.Contains(s, "\n.byte ") || strings.Contains(s, "\n.word ") ||
+		strings.Contains(s, "\n.long ") || strings.Contains(s, "\n.quad ") ||
+		strings.Contains(s, "\n\t.byte ") || strings.Contains(s, "\n\t.long ") {
+		hits++
+	}
+
+	// NASM/YASM directives.
+	if strings.Contains(s, "\nsection .text") || strings.Contains(s, "\nsection .data") ||
+		strings.Contains(s, "\nsection .bss") {
+		hits++
+	}
+	if strings.Contains(s, "\nglobal _start") || strings.Contains(s, "\nglobal main") {
+		hits++
+	}
+	if strings.Contains(s, "\ndb ") || strings.Contains(s, "\ndw ") || strings.Contains(s, "\ndd ") {
+		hits++
+	}
+
+	// x86/x64 register names — requiring several reduces false positives.
+	regCount := 0
+	for _, reg := range []string{"rax", "rbx", "rcx", "rdx", "rsi", "rdi", "rsp", "rbp",
+		"eax", "ebx", "ecx", "edx", "esi", "edi", "esp", "ebp"} {
+		if strings.Contains(s, reg) {
+			regCount++
+		}
+	}
+	if regCount >= 3 {
+		hits++
+	}
+
+	// Common tab-indented instruction mnemonics (tab distinguishes from prose).
+	instrCount := 0
+	for _, ins := range []string{"\tmov ", "\tpush ", "\tpop ", "\tcall ", "\tret\n",
+		"\tjmp ", "\tlea ", "\tcmp ", "\txor ", "\tadd ", "\tsub ", "\ttest "} {
+		if strings.Contains(s, ins) {
+			instrCount++
+		}
+	}
+	if instrCount >= 3 {
+		hits++
+	}
+
+	// ARM-specific markers.
+	if strings.Contains(s, "\t.arm\n") || strings.Contains(s, "\t.thumb\n") ||
+		(strings.Contains(s, "\tldr ") && strings.Contains(s, "\tstr ")) {
+		hits++
+	}
+
+	return hits >= 2
 }

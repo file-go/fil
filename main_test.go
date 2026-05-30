@@ -254,6 +254,22 @@ func TestDetectFromBytes_Fixtures(t *testing.T) {
 		{name: "iso8859-text", data: []byte("caf\xe9 na\xefve fianc\xe9\nline two\n"), descLike: "Non-UTF text", mime: "text/plain"},
 		{name: "data-fallback", data: []byte{0x00, 0x01, 0x02, 0x03, 0x04}, desc: "data", mime: "application/octet-stream"},
 
+		// Binary: archive/compression
+		{name: "cpio-newc", data: []byte("070701" + string(make([]byte, 20))), desc: "CPIO archive (SVR4 no CRC)", mime: "application/x-cpio"},
+		{name: "cpio-crc", data: []byte("070702" + string(make([]byte, 20))), desc: "CPIO archive (SVR4 with CRC)", mime: "application/x-cpio"},
+		{name: "squashfs-le", data: append([]byte("sqsh"), make([]byte, 12)...), desc: "Squashfs filesystem", mime: "application/x-squashfs"},
+		{name: "squashfs-be", data: append([]byte("hsqs"), make([]byte, 12)...), desc: "Squashfs filesystem", mime: "application/x-squashfs"},
+		{name: "zlib-default", data: []byte{0x78, 0x9C, 0x03, 0x00, 0x00, 0x00, 0x00, 0x01}, desc: "zlib compressed data", mime: "application/zlib"},
+		{name: "zlib-best", data: []byte{0x78, 0xDA, 0x03, 0x00, 0x00, 0x00, 0x00, 0x01}, desc: "zlib compressed data", mime: "application/zlib"},
+		{name: "lzh", data: func() []byte { b := make([]byte, 22); b[2] = '-'; b[3] = 'l'; b[4] = 'h'; b[5] = '5'; b[6] = '-'; return b }(), desc: "LHa archive", mime: "application/x-lzh-compressed"},
+		// Binary: security / firmware / platform
+		{name: "luks", data: append([]byte("LUKS\xBA\xBE\x00\x02"), make([]byte, 16)...), desc: "LUKS encrypted volume", mime: "application/x-luks"},
+		{name: "dtb", data: append([]byte("\xD0\x0D\xFE\xED"), make([]byte, 12)...), desc: "Device Tree Blob", mime: "application/x-dtb"},
+		{name: "android-boot", data: append([]byte("ANDROID!"), make([]byte, 16)...), desc: "Android boot image", mime: "application/vnd.android.boot-image"},
+		{name: "pgp-pubkey", data: []byte("-----BEGIN PGP PUBLIC KEY BLOCK-----\n\nxsBNBAAA\n-----END PGP PUBLIC KEY BLOCK-----\n"), desc: "PGP public key block", mime: "application/pgp-keys"},
+		{name: "pgp-message", data: []byte("-----BEGIN PGP MESSAGE-----\n\nhQEMA\n-----END PGP MESSAGE-----\n"), desc: "PGP message", mime: "application/pgp-encrypted"},
+		{name: "pgp-signature", data: []byte("-----BEGIN PGP SIGNATURE-----\n\niQEz\n-----END PGP SIGNATURE-----\n"), desc: "PGP signature", mime: "application/pgp-signature"},
+
 		// New binary formats
 		{name: "aiff", data: func() []byte {
 			b := make([]byte, 16)
@@ -272,7 +288,17 @@ func TestDetectFromBytes_Fixtures(t *testing.T) {
 		{name: "postscript", data: []byte("%!PS-Adobe-3.0\n%%Creator: test\n%%EOF\n"), desc: "PostScript document", mime: "application/postscript"},
 		{name: "eps", data: []byte("%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 200 200\n%%EOF\n"), desc: "Encapsulated PostScript document", mime: "application/postscript"},
 
-		// New text subtypes
+		// Text subtypes: new languages and formats
+		{name: "sql-ddl", data: []byte("CREATE TABLE users (\n  id INTEGER PRIMARY KEY,\n  name VARCHAR(255) NOT NULL\n);\nCREATE INDEX idx_name ON users(name);\n"), descLike: "SQL script", mime: "text/plain"},
+		{name: "sql-dml", data: []byte("SELECT u.id, u.name\nFROM users u\nINNER JOIN orders o ON o.user_id = u.id\nWHERE o.total > 100\nORDER BY u.name;\n"), descLike: "SQL script", mime: "text/plain"},
+		{name: "hcl-terraform", data: []byte("terraform {\n  required_version = \">= 1.0\"\n}\n\nresource \"aws_instance\" \"web\" {\n  ami           = \"ami-0c55b159cbfafe1f0\"\n  instance_type = \"t3.micro\"\n}\n"), descLike: "HCL", mime: "text/plain"},
+		{name: "lua-script", data: []byte("local M = {}\n\nfunction M.greet(name)\n  return \"Hello, \" .. name\nend\n\nif pairs and ipairs then\n  print(M.greet(\"world\"))\nend\n\nreturn M\n"), descLike: "Lua script", mime: "text/plain"},
+		{name: "r-script", data: []byte("library(ggplot2)\n\ndf <- data.frame(x = c(1,2,3), y = c(4,5,6))\nresult <- summary(df)\nprint(result)\n"), descLike: "R script", mime: "text/plain"},
+		{name: "proto", data: []byte("syntax = \"proto3\";\npackage example;\n\nmessage Request {\n  string name = 1;\n  int32 id = 2;\n}\n\nservice Greeter {\n  rpc SayHello (Request) returns (Request);\n}\n"), descLike: "Protocol Buffers", mime: "text/plain"},
+		{name: "cmake", data: []byte("cmake_minimum_required(VERSION 3.20)\nproject(MyApp CXX)\nadd_executable(myapp main.cpp)\ntarget_link_libraries(myapp PRIVATE pthread)\n"), descLike: "CMake", mime: "text/plain"},
+		{name: "asm-x86", data: []byte("\t.section .text\n\t.global main\nmain:\n\tpush rbp\n\tmov rbp, rsp\n\txor eax, eax\n\tpop rbp\n\tret\n"), descLike: "assembly source", mime: "text/plain"},
+
+		// Text subtypes: existing new additions
 		{name: "go-source", data: []byte("package main\n\nimport \"fmt\"\n\nfunc main() {\n\tfmt.Println(\"hello\")\n}\n"), descLike: "Go source", mime: "text/plain"},
 		{name: "rust-source", data: []byte("use std::io;\n\nfn main() {\n\tlet mut s = String::new();\n\tio::stdin().read_line(&mut s).unwrap();\n}\n"), descLike: "Rust source", mime: "text/plain"},
 		{name: "java-source", data: []byte("import java.util.ArrayList;\n\npublic class Main {\n\tpublic static void main(String[] args) {\n\t}\n}\n"), descLike: "Java source", mime: "text/plain"},
