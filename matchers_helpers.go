@@ -48,6 +48,27 @@ func hasArrowFooter(file *os.File) bool {
 	return bytes.Equal(buf, []byte("ARROW1"))
 }
 
+// parse80BitExtended converts an 80-bit IEEE 754 extended-precision float (used
+// by AIFF COMM chunk for sample rate) to an integer without importing math.
+// Works correctly for all standard audio sample rates.
+func parse80BitExtended(b []byte) int {
+	if len(b) < 10 {
+		return 0
+	}
+	exponent := int((uint16(b[0]&0x7F) << 8) | uint16(b[1]))
+	mantissa := uint64(b[2])<<56 | uint64(b[3])<<48 | uint64(b[4])<<40 |
+		uint64(b[5])<<32 | uint64(b[6])<<24 | uint64(b[7])<<16 |
+		uint64(b[8])<<8 | uint64(b[9])
+	if exponent == 0 || mantissa == 0 {
+		return 0
+	}
+	shift := 16383 + 63 - exponent
+	if shift < 0 || shift > 63 {
+		return 0
+	}
+	return int(mantissa >> uint(shift))
+}
+
 func isTiffLike(b []byte) bool {
 	return len(b) >= 4 && (bytes.HasPrefix(b, []byte{0x49, 0x49, 0x2A, 0x00}) || bytes.HasPrefix(b, []byte{0x4D, 0x4D, 0x00, 0x2A}))
 }

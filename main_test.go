@@ -32,7 +32,7 @@ func TestDetectFromBytes_Fixtures(t *testing.T) {
 
 	tests := []fixtureCase{
 		{name: "png", data: append([]byte("\x89PNG\x0d\x0a\x1a\x0a"), make([]byte, 24)...), desc: "PNG image data", mime: "image/png"},
-		{name: "gif89a", data: append([]byte("GIF89a"), make([]byte, 16)...), desc: "GIF image data", mime: "image/gif"},
+		{name: "gif89a", data: append([]byte("GIF89a"), make([]byte, 16)...), descLike: "GIF image data, version 89a", mime: "image/gif"},
 		{name: "jpeg", data: append([]byte("\xff\xd8"), make([]byte, 32)...), desc: "JPEG / jpg image data", mime: "image/jpeg"},
 		{name: "dds", data: []byte("DDS "), desc: "DDS image data", mime: "image/vnd-ms.dds"},
 		{name: "exr", data: []byte("\x76\x2F\x31\x01"), desc: "OpenEXR image data", mime: "image/x-exr"},
@@ -123,7 +123,7 @@ func TestDetectFromBytes_Fixtures(t *testing.T) {
 		{name: "7zip", data: append([]byte("\x37\x7A\xBC\xAF\x27\x1C"), make([]byte, 11)...), desc: "7zip archive data", mime: "application/x-7z-compressed"},
 		{name: "ico", data: append([]byte("\x00\x00\x01\x00"), make([]byte, 13)...), desc: "MS Windows icon resource", mime: "image/x-icon"},
 		{name: "cur", data: append([]byte("\x00\x00\x02\x00\x01\x00"), make([]byte, 12)...), desc: "MS Windows cursor resource", mime: "image/x-icon"},
-		{name: "sqlite", data: []byte("SQLite format 3\x00...."), desc: "SQLite database", mime: "application/x-sqlite3"},
+		{name: "sqlite", data: []byte("SQLite format 3\x00...."), descLike: "SQLite database", mime: "application/x-sqlite3"},
 		{name: "chm", data: append([]byte("ITSF"), make([]byte, 12)...), desc: "MS Windows HtmlHelp Data", mime: "application/vnd.ms-htmlhelp"},
 		{name: "ese-db", data: func() []byte {
 			b := make([]byte, 256)
@@ -213,7 +213,7 @@ func TestDetectFromBytes_Fixtures(t *testing.T) {
 			copy(b[:3], []byte("RIF"))
 			copy(b[8:12], []byte("WEBP"))
 			return b
-		}(), desc: "Google Webp file", mime: "image/webp"},
+		}(), desc: "Google WebP file", mime: "image/webp"},
 		{name: "rtf", data: append([]byte("{\\rtf1"), make([]byte, 27)...), desc: "Rich Text Format", mime: "application/rtf"},
 		{name: "html", data: []byte("<!DOCTYPE html><html><body>ok</body></html>"), desc: "HTML document", mime: "text/html"},
 		{name: "binary-with-embedded-html", data: func() []byte {
@@ -276,6 +276,55 @@ func TestDetectFromBytes_Fixtures(t *testing.T) {
 		{name: "pgp-pubkey", data: []byte("-----BEGIN PGP PUBLIC KEY BLOCK-----\n\nxsBNBAAA\n-----END PGP PUBLIC KEY BLOCK-----\n"), desc: "PGP public key block", mime: "application/pgp-keys"},
 		{name: "pgp-message", data: []byte("-----BEGIN PGP MESSAGE-----\n\nhQEMA\n-----END PGP MESSAGE-----\n"), desc: "PGP message", mime: "application/pgp-encrypted"},
 		{name: "pgp-signature", data: []byte("-----BEGIN PGP SIGNATURE-----\n\niQEz\n-----END PGP SIGNATURE-----\n"), desc: "PGP signature", mime: "application/pgp-signature"},
+
+		// Expanded detail — verify richer descriptions using valid header bytes.
+		{name: "png-1920x1080", data: func() []byte {
+			b := make([]byte, 32)
+			copy(b, []byte("\x89PNG\x0d\x0a\x1a\x0a\x00\x00\x00\x0DIHDR"))
+			b[16], b[17], b[18], b[19] = 0, 0, 0x07, 0x80 // width 1920
+			b[20], b[21], b[22], b[23] = 0, 0, 0x04, 0x38 // height 1080
+			b[24] = 8  // bit depth
+			b[25] = 2  // color type RGB
+			b[28] = 0  // non-interlaced
+			return b
+		}(), descLike: "PNG image data, 1920 x 1080, 8-bit/color RGB, non-interlaced", mime: "image/png"},
+		{name: "gif-800x600", data: func() []byte {
+			b := make([]byte, 20)
+			copy(b, []byte("GIF89a"))
+			b[6], b[7] = 0x20, 0x03 // width 800 LE
+			b[8], b[9] = 0x58, 0x02 // height 600 LE
+			return b
+		}(), descLike: "GIF image data, version 89a, 800 x 600", mime: "image/gif"},
+		{name: "pdf-1.7", data: append([]byte("%PDF-1.7\n"), make([]byte, 45)...), descLike: "PDF document, version 1.7", mime: "application/pdf"},
+		{name: "sqlite-4096", data: func() []byte {
+			b := make([]byte, 48)
+			copy(b, []byte("SQLite format 3\x00"))
+			b[16], b[17] = 0x10, 0x00 // page size 4096 big-endian
+			return b
+		}(), descLike: "SQLite database, page size 4096", mime: "application/x-sqlite3"},
+		{name: "wav-44100", data: func() []byte {
+			b := make([]byte, 36)
+			copy(b, []byte("RIFF"))
+			copy(b[8:], []byte("WAVEfmt "))
+			b[16] = 16 // fmt chunk size
+			b[20], b[21] = 1, 0   // PCM
+			b[22], b[23] = 2, 0   // stereo
+			b[24], b[25], b[26], b[27] = 0x44, 0xAC, 0, 0 // 44100 Hz LE
+			b[34], b[35] = 16, 0  // 16-bit
+			return b
+		}(), descLike: "WAV audio, 44100 Hz, stereo, 16-bit PCM", mime: "audio/wav"},
+		{name: "webp-vp8x-animated", data: func() []byte {
+			b := make([]byte, 34) // >32 to satisfy minLen check
+			copy(b, []byte("RIFF"))
+			copy(b[8:12], []byte("WEBP"))
+			copy(b[12:16], []byte("VP8X"))
+			b[20] = 0x02 // animation flag
+			// canvas width-1 = 639 (0x27F) LE 3-byte
+			b[24], b[25], b[26] = 0x7F, 0x02, 0x00
+			// canvas height-1 = 479 (0x1DF) LE 3-byte
+			b[27], b[28], b[29] = 0xDF, 0x01, 0x00
+			return b
+		}(), descLike: "Google WebP file (animated, 640 x 480)", mime: "image/webp"},
 
 		// New binary formats
 		{name: "aiff", data: func() []byte {

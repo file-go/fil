@@ -14,8 +14,34 @@ var matcherPng = fileMatcher{
 		return lenb > 28 && HasPrefix(b, "\x89PNG\x0d\x0a\x1a\x0a")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
-		return "PNG image data"
+		return describePNG(b)
 	},
+}
+
+func describePNG(b []byte) string {
+	if len(b) < 29 {
+		return "PNG image data"
+	}
+	width := peekBe(b[16:], 4)
+	height := peekBe(b[20:], 4)
+	if width <= 0 || height <= 0 {
+		return "PNG image data"
+	}
+	bitDepth := int(b[24])
+	colorType := int(b[25])
+	interlaceStr := "non-interlaced"
+	if b[28] == 1 {
+		interlaceStr = "interlaced"
+	}
+	colorName := map[int]string{
+		0: "grayscale", 2: "RGB", 3: "colormap",
+		4: "grayscale, alpha", 6: "RGBA",
+	}[colorType]
+	if colorName == "" {
+		colorName = "unknown"
+	}
+	return fmt.Sprintf("PNG image data, %d x %d, %d-bit/color %s, %s",
+		width, height, bitDepth, colorName, interlaceStr)
 }
 
 var matcherGif = fileMatcher{
@@ -26,8 +52,21 @@ var matcherGif = fileMatcher{
 		return lenb > 16 && (HasPrefix(b, "GIF87a") || HasPrefix(b, "GIF89a"))
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
-		return "GIF image data"
+		return describeGIF(b)
 	},
+}
+
+func describeGIF(b []byte) string {
+	if len(b) < 10 {
+		return "GIF image data"
+	}
+	version := string(b[3:6])
+	width := peekLe(b[6:], 2)
+	height := peekLe(b[8:], 2)
+	if width > 0 && height > 0 {
+		return fmt.Sprintf("GIF image data, version %s, %d x %d", version, width, height)
+	}
+	return fmt.Sprintf("GIF image data, version %s", version)
 }
 
 var matcherJpeg = fileMatcher{
@@ -38,8 +77,47 @@ var matcherJpeg = fileMatcher{
 		return lenb > 32 && HasPrefix(b, "\xff\xd8")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
-		return "JPEG / jpg image data"
+		return describeJPEG(b)
 	},
+}
+
+func describeJPEG(b []byte) string {
+	// Scan JPEG markers starting after SOI to find a Start-of-Frame marker.
+	offset := 2
+	for offset+3 < len(b) {
+		if b[offset] != 0xFF {
+			break
+		}
+		marker := b[offset+1]
+		// SOF markers: 0xC0–0xCF excluding DHT(C4), JPG(C8), DAC(CC).
+		isSof := marker >= 0xC0 && marker <= 0xCF &&
+			marker != 0xC4 && marker != 0xC8 && marker != 0xCC
+		if isSof && offset+9 < len(b) {
+			height := peekBe(b[offset+5:], 2)
+			width := peekBe(b[offset+7:], 2)
+			if width > 0 && height > 0 {
+				if marker == 0xC2 {
+					return fmt.Sprintf("JPEG / jpg image data, %d x %d, progressive", width, height)
+				}
+				return fmt.Sprintf("JPEG / jpg image data, %d x %d", width, height)
+			}
+			break
+		}
+		// Standalone markers with no length field.
+		if marker == 0xD8 || marker == 0xD9 || (marker >= 0xD0 && marker <= 0xD7) {
+			offset += 2
+			continue
+		}
+		if offset+3 >= len(b) {
+			break
+		}
+		segLen := peekBe(b[offset+2:], 2)
+		if segLen < 2 {
+			break
+		}
+		offset += 2 + segLen
+	}
+	return "JPEG / jpg image data"
 }
 
 var matcherDds = fileMatcher{
@@ -260,11 +338,31 @@ var matcherAiff = fileMatcher{
 			(Equal(b[8:12], "AIFF") || Equal(b[8:12], "AIFC"))
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
-		if Equal(b[8:12], "AIFC") {
-			return "AIFF-C audio data"
-		}
-		return "AIFF audio data"
+		return describeAIFF(b)
 	},
+}
+
+func describeAIFF(b []byte) string {
+	isAIFC := len(b) >= 12 && Equal(b[8:12], "AIFC")
+	base := "AIFF audio data"
+	if isAIFC {
+		base = "AIFF-C audio data"
+	}
+	// COMM chunk is typically first, starting at byte 12:
+	// "COMM"(4) + size(4) + channels(2) + frames(4) + sampleSize(2) + sampleRate(10)
+	if len(b) >= 38 && Equal(b[12:16], "COMM") {
+		channels := peekBe(b[20:], 2)
+		sampleSize := peekBe(b[26:], 2)
+		sampleRate := parse80BitExtended(b[28:])
+		if sampleRate > 0 && channels > 0 && sampleSize > 0 {
+			chStr := map[int]string{1: "mono", 2: "stereo"}[channels]
+			if chStr == "" {
+				chStr = fmt.Sprintf("%d channels", channels)
+			}
+			return fmt.Sprintf("%s, %d Hz, %s, %d-bit", base, sampleRate, chStr, sampleSize)
+		}
+	}
+	return base
 }
 
 var matcherAac = fileMatcher{
@@ -294,8 +392,32 @@ var matcherWav = fileMatcher{
 		return lenb > 32 && HasPrefix(b, "RIF") && Equal(b[8:16], "WAVEfmt ")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
-		return "WAV audio"
+		return describeWAV(b)
 	},
+}
+
+func describeWAV(b []byte) string {
+	if len(b) < 36 {
+		return "WAV audio"
+	}
+	audioFmt := peekLe(b[20:], 2)
+	channels := peekLe(b[22:], 2)
+	sampleRate := peekLe(b[24:], 4)
+	bitsPerSample := peekLe(b[34:], 2)
+	if sampleRate <= 0 || channels <= 0 || bitsPerSample <= 0 {
+		return "WAV audio"
+	}
+	fmtName := map[int]string{
+		1: "PCM", 3: "IEEE float", 6: "a-law", 7: "mu-law", 0xFFFE: "extensible",
+	}[audioFmt]
+	if fmtName == "" {
+		fmtName = fmt.Sprintf("format 0x%04X", audioFmt)
+	}
+	chStr := map[int]string{1: "mono", 2: "stereo"}[channels]
+	if chStr == "" {
+		chStr = fmt.Sprintf("%d channels", channels)
+	}
+	return fmt.Sprintf("WAV audio, %d Hz, %s, %d-bit %s", sampleRate, chStr, bitsPerSample, fmtName)
 }
 
 var matcherMp3 = fileMatcher{
@@ -489,8 +611,30 @@ var matcherFlac = fileMatcher{
 		return lenb > 16 && HasPrefix(b, "\x66\x4C\x61\x43")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
-		return "FLAC audio format"
+		return describeFLAC(b)
 	},
+}
+
+func describeFLAC(b []byte) string {
+	// STREAMINFO metadata block starts at byte 4 (after "fLaC" marker).
+	// Byte 4: last-block flag (1 bit) + block type (7 bits); STREAMINFO = type 0.
+	// Bytes 5-7: block length. STREAMINFO data starts at byte 8.
+	// Sample rate: 20 bits starting at STREAMINFO byte 10 (file byte 18).
+	// Channels-1: 3 bits; bits_per_sample-1: 5 bits — packed in file bytes 20-21.
+	if len(b) < 22 {
+		return "FLAC audio format"
+	}
+	sampleRate := (int(b[18]) << 12) | (int(b[19]) << 4) | (int(b[20]) >> 4)
+	channels := ((int(b[20]) >> 1) & 0x07) + 1
+	bitsPerSample := ((int(b[20])&0x01)<<4 | int(b[21])>>4) + 1
+	if sampleRate <= 0 {
+		return "FLAC audio format"
+	}
+	chStr := map[int]string{1: "mono", 2: "stereo"}[channels]
+	if chStr == "" {
+		chStr = fmt.Sprintf("%d channels", channels)
+	}
+	return fmt.Sprintf("FLAC audio format, %d Hz, %s, %d-bit", sampleRate, chStr, bitsPerSample)
 }
 
 var matcherMidi = fileMatcher{
@@ -573,6 +717,41 @@ var matcherWebp = fileMatcher{
 		return lenb > 32 && HasPrefix(b, "RIF") && Equal(b[8:12], "WEBP")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
-		return "Google Webp file"
+		return describeWebP(b)
 	},
+}
+
+func describeWebP(b []byte) string {
+	if len(b) < 16 {
+		return "Google WebP file"
+	}
+	switch {
+	case Equal(b[12:16], "VP8 "):
+		// Lossy VP8 key frame: 3-byte frame tag + start code 0x9D 0x01 0x2A.
+		if len(b) >= 30 && b[20]&0x01 == 0 && b[23] == 0x9D && b[24] == 0x01 && b[25] == 0x2A {
+			width := (int(b[26]) | int(b[27])<<8) & 0x3FFF
+			height := (int(b[28]) | int(b[29])<<8) & 0x3FFF
+			if width > 0 && height > 0 {
+				return fmt.Sprintf("Google WebP file (lossy, %d x %d)", width, height)
+			}
+		}
+		return "Google WebP file (lossy)"
+	case Equal(b[12:16], "VP8L"):
+		return "Google WebP file (lossless)"
+	case Equal(b[12:16], "VP8X"):
+		// Extended: flags at byte 20; canvas dims at bytes 24–29 (3-byte LE each, value = dim-1).
+		if len(b) >= 30 {
+			flags := b[20]
+			width := (int(b[24]) | int(b[25])<<8 | int(b[26])<<16) + 1
+			height := (int(b[27]) | int(b[28])<<8 | int(b[29])<<16) + 1
+			variant := "extended"
+			if flags&0x02 != 0 {
+				variant = "animated"
+			}
+			return fmt.Sprintf("Google WebP file (%s, %d x %d)", variant, width, height)
+		}
+		return "Google WebP file (extended)"
+	default:
+		return "Google WebP file"
+	}
 }

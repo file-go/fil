@@ -166,8 +166,24 @@ var matcherSqlite = fileMatcher{
 		return lenb > 16 && HasPrefix(b, "\x53\x51\x4C\x69\x74\x65\x20\x66\x6F\x72\x6D\x61\x74\x20\x33\x00")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
-		return "SQLite database"
+		return describeSQLite(b)
 	},
+}
+
+func describeSQLite(b []byte) string {
+	if len(b) < 18 {
+		return "SQLite database"
+	}
+	// Page size at bytes 16-17 big-endian; value 1 means 65536.
+	pageSizeRaw := peekBe(b[16:], 2)
+	pageSize := pageSizeRaw
+	if pageSize == 1 {
+		pageSize = 65536
+	}
+	if pageSize > 0 {
+		return fmt.Sprintf("SQLite database, page size %d", pageSize)
+	}
+	return "SQLite database"
 }
 
 var matcherSqliteWal = fileMatcher{

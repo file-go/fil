@@ -437,7 +437,7 @@ func dynamicMIME(desc string) string {
 		return "application/vnd.oasis.opendocument.database"
 	case strings.HasPrefix(dl, "opendocument"):
 		return "application/vnd.oasis.opendocument"
-	case dl == "zip archive data":
+	case strings.HasPrefix(dl, "zip archive data"):
 		return "application/zip"
 
 	// AR sub-types (doAr)
@@ -887,6 +887,23 @@ func doElf(contentByte []byte) string {
 		}
 
 		if ptpye == 3 /*PT_INTERP*/ {
+			// Extract interpreter path from PT_INTERP segment.
+			// p_offset field position differs between 32-bit and 64-bit ELF.
+			var interpOffset, interpSize int
+			if bits == 0 { // 32-bit: p_offset at phdr[4], p_filesz at phdr[16]
+				interpOffset = elfint(phdr[4:], 4)
+				interpSize = elfint(phdr[16:], 4)
+			} else { // 64-bit: p_offset at phdr[8], p_filesz at phdr[32]
+				interpOffset = elfint(phdr[8:], 4)
+				interpSize = elfint(phdr[32:], 4)
+			}
+			if interpOffset > 0 && interpSize > 0 && interpOffset+interpSize <= len(contentByte) {
+				interp := strings.TrimRight(string(contentByte[interpOffset:interpOffset+interpSize]), "\x00")
+				if interp != "" {
+					output.WriteString(", dynamically linked (interpreter " + interp + ")")
+					continue
+				}
+			}
 			output.WriteString(", dynamically linked")
 		}
 	}
@@ -1111,6 +1128,8 @@ func doZip(file *os.File) string {
 		if hasContentTypes && hasRels && hasXMLPayload {
 			return "Microsoft OOXML"
 		}
+
+		return fmt.Sprintf("Zip archive data, %d files", len(zipReader.File))
 	}
 
 	return "Zip archive data"

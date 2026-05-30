@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"strings"
 )
@@ -15,8 +16,24 @@ var matcherBmp = fileMatcher{
 		return lenb > 50 && HasPrefix(b, "BM") && Equal(b[6:10], "\x00\x00\x00\x00")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
-		return "BMP image"
+		return describeBMP(b)
 	},
+}
+
+func describeBMP(b []byte) string {
+	if len(b) < 30 {
+		return "BMP image"
+	}
+	width := int(int32(peekLe(b[18:], 4)))
+	height := int(int32(peekLe(b[22:], 4)))
+	if height < 0 {
+		height = -height
+	}
+	bpp := peekLe(b[28:], 2)
+	if width > 0 && height > 0 {
+		return fmt.Sprintf("BMP image, %d x %d, %d-bit", width, height, bpp)
+	}
+	return "BMP image"
 }
 
 var matcherWmf = fileMatcher{
@@ -47,8 +64,19 @@ var matcherPdf = fileMatcher{
 		return lenb > 50 && HasPrefix(b, "\x25\x50\x44\x46")
 	},
 	describe: func(b []byte, lenb int, magic int, file *os.File) string {
-		return "PDF document"
+		return describePDF(b)
 	},
+}
+
+func describePDF(b []byte) string {
+	// Header format: %PDF-X.Y
+	if len(b) >= 8 && HasPrefix(b, "%PDF-") {
+		ver := strings.TrimRight(string(b[5:8]), "\r\n \x00")
+		if len(ver) == 3 && ver[1] == '.' {
+			return "PDF document, version " + ver
+		}
+	}
+	return "PDF document"
 }
 
 var matcherMobi = fileMatcher{
